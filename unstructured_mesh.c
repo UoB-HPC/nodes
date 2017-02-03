@@ -24,7 +24,7 @@ void build_unstructured_mesh(
   mesh->cells_indirection1 = (int*)malloc(sizeof(int)*nedges);
   mesh->cells_indirection2 = (int*)malloc(sizeof(int)*nedges);
   mesh->edges = (int*)malloc(sizeof(int)*local_nx*local_ny*NFACES);
-  mesh->edges = (int*)malloc(sizeof(int)*local_nx*local_ny);
+  mesh->nfaces = (int*)malloc(sizeof(int)*local_nx*local_ny);
 
   /* Simply faking the unstructured mesh here, presumably it would be generated 
    * by some sort of parallel mesh generator */
@@ -35,9 +35,7 @@ void build_unstructured_mesh(
       const int index = ii*(local_nx+1)+jj;
       mesh->vertices_x[index] = (double)(jj-PAD)*(WIDTH/(double)global_nx);
       mesh->vertices_y[index] = (double)(ii-PAD)*(HEIGHT/(double)global_ny);
-      printf("(%f, %f)", mesh->vertices_x[index], mesh->vertices_y[index]);
     }
-    printf("\n");
   }
 
   // Construct the list of edges
@@ -85,19 +83,7 @@ void build_unstructured_mesh(
       mesh->edges[index+3] = ii*(2*local_nx+1)+(jj+local_nx+1);
     }
   }
+
+  printf("unstructured cartesian data initialised\n");
 }
-
-#if 0
- _ _ _ _
-|_|_|_|_|
-|_|_|_|_|
-|_|_|_|_|
-
-2x2   12 edge  9 vert       
-3x2   17 edge  12 vert      +5  +3
-3x3   24 edge  16 vert      +7  +4
-3x4   31 edge  20 vert      +7  +4
-
-n in x  (2*nx+1)*ny-nx
-#endif // if 0
 
