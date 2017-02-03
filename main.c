@@ -63,8 +63,9 @@ int main(int argc, char** argv)
     double end_error = 0.0;
     solve_unstructured_diffusion_2d(
         mesh.local_nx, mesh.local_ny, &mesh, mesh.dt, shared_data.x, 
-        shared_data.r, shared_data.p, shared_data.rho, shared_data.s_x, shared_data.s_y, 
-        shared_data.Ap, &end_niters, &end_error, shared_data.reduce_array, mesh.edgedx, mesh.edgedy);
+        shared_data.r, shared_data.p, shared_data.rho, shared_data.s_x, 
+        shared_data.s_y, shared_data.Ap, &end_niters, &end_error, 
+        shared_data.reduce_array, mesh.edgedx, mesh.edgedy);
 
     if(mesh.rank == MASTER)
       printf("finished on diffusion iteration %d with error %e\n", end_niters, end_error);
