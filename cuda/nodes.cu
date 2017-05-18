@@ -61,6 +61,15 @@ void solve_unstructured_diffusion_2d(
   *end_error = global_old_r2;
 }
 
+void initialise_neighbour_list(
+    const int nx, const int ny, int* neighbours_ii, int* neighbours_jj) 
+{
+  int nblocks = ceil(nx*ny/(double)NTHREADS);
+  initialise_neighbours<<<nblocks, NTHREADS>>>(
+      nx, ny, neighbours_ii, neighbours_jj);
+  gpu_check(cudaDeviceSynchronize());
+}
+
 // Initialises the CG solver
 double initialise_cg(
     const int nx, const int ny, const double dt, const double heat_capacity, 

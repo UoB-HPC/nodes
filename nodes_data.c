@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "nodes_data.h"
+#include "nodes_interface.h"
 #include "../params.h"
 #include "../mesh.h"
 #include "../shared.h"
@@ -21,29 +22,7 @@ void initialise_nodes_data(
   // Describe the neighbours for all real cells
   allocate_int_data(&nodes_data->neighbours_ii, nneighbours*nx*ny);
   allocate_int_data(&nodes_data->neighbours_jj, nneighbours*nx*ny);
-
-  int* h_neighbours_ii;
-  int* h_neighbours_jj;
-  allocate_host_int_data(&h_neighbours_ii, nneighbours*nx*ny);
-  allocate_host_int_data(&h_neighbours_jj, nneighbours*nx*ny);
-
-  for(int ii = PAD; ii < ny-PAD; ++ii) {
-    for(int jj = PAD; jj < nx-PAD; ++jj) {
-      // Manual 5pt stencil
-      h_neighbours_ii[(ii)*nx*nneighbours+(jj)*nneighbours+NORTH_STENCIL] = (ii+1);
-      h_neighbours_ii[(ii)*nx*nneighbours+(jj)*nneighbours+EAST_STENCIL] = (ii);
-      h_neighbours_ii[(ii)*nx*nneighbours+(jj)*nneighbours+SOUTH_STENCIL] = (ii-1);
-      h_neighbours_ii[(ii)*nx*nneighbours+(jj)*nneighbours+WEST_STENCIL] = (ii);
-      h_neighbours_jj[(ii)*nx*nneighbours+(jj)*nneighbours+NORTH_STENCIL] = (jj);
-      h_neighbours_jj[(ii)*nx*nneighbours+(jj)*nneighbours+EAST_STENCIL] = (jj+1);
-      h_neighbours_jj[(ii)*nx*nneighbours+(jj)*nneighbours+SOUTH_STENCIL] = (jj);
-      h_neighbours_jj[(ii)*nx*nneighbours+(jj)*nneighbours+WEST_STENCIL] = (jj-1);
-    }
-  }
-
-  // TODO: FIX THE STUPID MEMORY LEAK HERE
-  copy_int_buffer(nneighbours*nx*ny, &h_neighbours_ii, &nodes_data->neighbours_ii, SEND);
-  copy_int_buffer(nneighbours*nx*ny, &h_neighbours_jj, &nodes_data->neighbours_jj, SEND);
+  initialise_neighbour_list(nx, ny, nodes_data->neighbours_ii, nodes_data->neighbours_jj);
 }
 
 #if 0

@@ -1,5 +1,24 @@
 #include "../../cuda/reduction.k"
 
+__global__ void initialise_neighbours(
+    const int nx, const int ny, int* neighbours_ii, int* neighbours_jj)
+{
+  const int gid = threadIdx.x+blockIdx.x*blockDim.x;
+  const int jj = (gid % (nx));
+  const int ii = (gid / (nx));
+  if(ii < PAD || jj < PAD || jj >= nx-PAD || ii >= ny-PAD) return;
+
+  // Manual 5pt stencil
+  neighbours_ii[NORTH_STENCIL*nx*ny+(ii)*nx+(jj)] = (ii+1);
+  neighbours_ii[EAST_STENCIL*nx*ny+(ii)*nx+(jj)] = (ii);
+  neighbours_ii[SOUTH_STENCIL*nx*ny+(ii)*nx+(jj)] = (ii-1);
+  neighbours_ii[WEST_STENCIL*nx*ny+(ii)*nx+(jj)] = (ii);
+  neighbours_jj[NORTH_STENCIL*nx*ny+(ii)*nx+(jj)] = (jj);
+  neighbours_jj[EAST_STENCIL*nx*ny+(ii)*nx+(jj)] = (jj+1);
+  neighbours_jj[SOUTH_STENCIL*nx*ny+(ii)*nx+(jj)] = (jj);
+  neighbours_jj[WEST_STENCIL*nx*ny+(ii)*nx+(jj)] = (jj-1);
+}
+
 // https://inldigitallibrary.inl.gov/sti/3952796.pdf
 // Take the average of the coefficients at the cells surrounding 
 // each face
@@ -41,19 +60,18 @@ __global__ void calc_initial_r2(
   sdata[tid] = 0.0;
 
   if(ii >= PAD && jj >= PAD && jj < nx-PAD && ii < ny-PAD) {
-    const int neighbour_index = (ii)*nx*nneighbours+(jj)*nneighbours;
-    const int nii = neighbours_ii[neighbour_index+NORTH_STENCIL];
-    const int eii = neighbours_ii[neighbour_index+EAST_STENCIL];
-    const int sii = neighbours_ii[neighbour_index+SOUTH_STENCIL];
-    const int wii = neighbours_ii[neighbour_index+WEST_STENCIL];
-    const int njj = neighbours_jj[neighbour_index+NORTH_STENCIL];
-    const int ejj = neighbours_jj[neighbour_index+EAST_STENCIL];
-    const int sjj = neighbours_jj[neighbour_index+SOUTH_STENCIL];
-    const int wjj = neighbours_jj[neighbour_index+WEST_STENCIL];
+    const int nii = neighbours_ii[gid+NORTH_STENCIL*nx*ny];
+    const int eii = neighbours_ii[gid+EAST_STENCIL*nx*ny];
+    const int sii = neighbours_ii[gid+SOUTH_STENCIL*nx*ny];
+    const int wii = neighbours_ii[gid+WEST_STENCIL*nx*ny];
+    const int njj = neighbours_jj[gid+NORTH_STENCIL*nx*ny];
+    const int ejj = neighbours_jj[gid+EAST_STENCIL*nx*ny];
+    const int sjj = neighbours_jj[gid+SOUTH_STENCIL*nx*ny];
+    const int wjj = neighbours_jj[gid+WEST_STENCIL*nx*ny];
 
     r[(ii)*nx+(jj)] = x[(ii)*nx+(jj)] -
       ((s_y[(ii)*nx+(jj)]+s_x[(ii)*(nx+1)+(jj)]+1.0+
-      s_x[(eii)*(nx+1)+(ejj)]+s_y[(nii)*nx+(njj)])*x[(ii)*nx+(jj)]
+        s_x[(eii)*(nx+1)+(ejj)]+s_y[(nii)*nx+(njj)])*x[(ii)*nx+(jj)]
        - s_y[(ii)*nx+(jj)]*x[(sii)*nx+(sjj)]
        - s_x[(ii)*(nx+1)+(jj)]*x[(wii)*nx+(wjj)] 
        - s_x[(eii)*(nx+1)+(ejj)]*x[(eii)*nx+(ejj)]
@@ -84,15 +102,14 @@ __global__ void calc_pAp(
   // You don't need to use a matrix as the band matrix is fully predictable
   // from the 5pt stencil
   if(ii >= PAD & jj >= PAD && jj < nx-PAD && ii < ny-PAD) {
-    const int neighbour_index = (ii)*nx*nneighbours+(jj)*nneighbours;
-    const int nii = neighbours_ii[neighbour_index+NORTH_STENCIL];
-    const int eii = neighbours_ii[neighbour_index+EAST_STENCIL];
-    const int sii = neighbours_ii[neighbour_index+SOUTH_STENCIL];
-    const int wii = neighbours_ii[neighbour_index+WEST_STENCIL];
-    const int njj = neighbours_jj[neighbour_index+NORTH_STENCIL];
-    const int ejj = neighbours_jj[neighbour_index+EAST_STENCIL];
-    const int sjj = neighbours_jj[neighbour_index+SOUTH_STENCIL];
-    const int wjj = neighbours_jj[neighbour_index+WEST_STENCIL];
+    const int nii = neighbours_ii[gid+NORTH_STENCIL*nx*ny];
+    const int eii = neighbours_ii[gid+EAST_STENCIL*nx*ny];
+    const int sii = neighbours_ii[gid+SOUTH_STENCIL*nx*ny];
+    const int wii = neighbours_ii[gid+WEST_STENCIL*nx*ny];
+    const int njj = neighbours_jj[gid+NORTH_STENCIL*nx*ny];
+    const int ejj = neighbours_jj[gid+EAST_STENCIL*nx*ny];
+    const int sjj = neighbours_jj[gid+SOUTH_STENCIL*nx*ny];
+    const int wjj = neighbours_jj[gid+WEST_STENCIL*nx*ny];
 
     Ap[(ii)*nx+(jj)] = 
       (s_y[(ii)*nx+(jj)]+s_x[(ii)*(nx+1)+(jj)]+1.0+

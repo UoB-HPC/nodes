@@ -57,6 +57,24 @@ void solve_unstructured_diffusion_2d(
   *end_error = global_old_r2;
 }
 
+void initialise_neighbour_list(
+    const int nx, const int ny, const int* neighbours_ii, const int* neighbours_jj)
+{
+  for(int ii = PAD; ii < ny-PAD; ++ii) {
+    for(int jj = PAD; jj < nx-PAD; ++jj) {
+      // Manual 5pt stencil
+      neighbours_ii[NORTH_STENCIL*nx*ny+(ii)*nx+(jj)] = (ii+1);
+      neighbours_ii[EAST_STENCIL*nx*ny+(ii)*nx+(jj)] = (ii);
+      neighbours_ii[SOUTH_STENCIL*nx*ny+(ii)*nx+(jj)] = (ii-1);
+      neighbours_ii[WEST_STENCIL*nx*ny+(ii)*nx+(jj)] = (ii);
+      neighbours_jj[NORTH_STENCIL*nx*ny+(ii)*nx+(jj)] = (jj);
+      neighbours_jj[EAST_STENCIL*nx*ny+(ii)*nx+(jj)] = (jj+1);
+      neighbours_jj[SOUTH_STENCIL*nx*ny+(ii)*nx+(jj)] = (jj);
+      neighbours_jj[WEST_STENCIL*nx*ny+(ii)*nx+(jj)] = (jj-1);
+    }
+  }
+}
+
 // Initialises the CG solver
 double initialise_cg(
     const int nx, const int ny, const double dt, const double conductivity,

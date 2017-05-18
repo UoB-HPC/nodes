@@ -15,6 +15,9 @@ void solve_unstructured_diffusion_2d(
     const double* edgedx, const double* edgedy, const int nneighbours, 
     const int* neighbours_ii, const int* neighbours_jj);
 
+void initialise_neighbour_list(
+    const int nx, const int ny, int* neighbours_ii, int* neighbours_jj);
+
 #ifdef __cplusplus
 }
 #endif
