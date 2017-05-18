@@ -96,11 +96,11 @@ __global__ void calc_pAp(
 
     Ap[(ii)*nx+(jj)] = 
       (s_y[(ii)*nx+(jj)]+s_x[(ii)*(nx+1)+(jj)]+1.0+
-       s_x[(ii)*(nx+1)+(jj+1)]+s_y[(ii+1)*nx+(jj)])*p[(ii)*nx+(jj)]
-      - s_y[(ii)*nx+(jj)]*p[(ii-1)*nx+(jj)]
-      - s_x[(ii)*(nx+1)+(jj)]*p[(ii)*nx+(jj-1)] 
-      - s_x[(ii)*(nx+1)+(jj+1)]*p[(ii)*nx+(jj+1)]
-      - s_y[(ii+1)*nx+(jj)]*p[(ii+1)*nx+(jj)];
+       s_x[(eii)*(nx+1)+(ejj)]+s_y[(nii)*nx+(njj)])*p[(ii)*nx+(jj)]
+      - s_y[(ii)*nx+(jj)]*p[(sii)*nx+(sjj)]
+      - s_x[(ii)*(nx+1)+(jj)]*p[(wii)*nx+(wjj)] 
+      - s_x[(eii)*(nx+1)+(ejj)]*p[(eii)*nx+(ejj)]
+      - s_y[(nii)*nx+(njj)]*p[(nii)*nx+(njj)];
     sdata[threadIdx.x] = p[(ii)*nx+(jj)]*Ap[(ii)*nx+(jj)];
   }
   __syncthreads();
