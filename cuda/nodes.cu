@@ -2,17 +2,17 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
-#include "hot.h"
-#include "../hot_interface.h"
-#include "../hot_data.h"
+#include "nodes.h"
+#include "../nodes_interface.h"
+#include "../nodes_data.h"
 #include "../../cuda/shared.h"
 #include "../../profiler.h"
 #include "../../comms.h"
-#include "hot.k"
+#include "nodes.k"
 
 // Performs the CG solve, you always want to perform these steps, regardless
 // of the context of the problem etc.
-void solve_diffusion_2d(
+void solve_unstructured_diffusion_2d(
     const int nx, const int ny, Mesh* mesh, const int max_inners, const double dt, 
     const double heat_capacity, const double conductivity, double* x, double* r, 
     double* p, double* rho, double* s_x, double* s_y, double* Ap, int* end_niters, 
@@ -22,7 +22,7 @@ void solve_diffusion_2d(
   // Store initial residual
   double local_old_r2 = initialise_cg(
       nx, ny, dt, heat_capacity, conductivity, p, r, x, rho, s_x, s_y, 
-      reduce_array, edgedx, edgedy);
+      reduce_array, edgedx, edgedy, nneighbours, neighbours_ii, neighbours_jj);
 
   double global_old_r2 = reduce_all_sum(
       local_old_r2);
@@ -34,7 +34,8 @@ void solve_diffusion_2d(
   int ii = 0;
   for(ii = 0; ii < max_inners; ++ii) {
 
-    const double local_pAp = calculate_pAp(nx, ny, s_x, s_y, p, Ap, reduce_array);
+    const double local_pAp = calculate_pAp(
+        nx, ny, s_x, s_y, p, Ap, reduce_array, nneighbours, neighbours_ii, neighbours_jj);
     const double global_pAp = reduce_all_sum(local_pAp);
     const double alpha = global_old_r2/global_pAp;
 
@@ -65,7 +66,8 @@ double initialise_cg(
     const int nx, const int ny, const double dt, const double heat_capacity, 
     const double conductivity, double* p, double* r, const double* x, 
     const double* rho, double* s_x, double* s_y, double* reduce_array,
-    const double* edgedx, const double* edgedy)
+    const double* edgedx, const double* edgedy,
+    const int nneighbours, const int* neighbours_ii, const int* neighbours_jj)
 {
   int nblocks = ceil((nx+1)*ny/(double)NTHREADS);
   calc_s_x<<<nblocks, NTHREADS>>>(
@@ -90,7 +92,8 @@ double initialise_cg(
 // Calculates a value for alpha
 double calculate_pAp(
     const int nx, const int ny, const double* s_x, 
-    const double* s_y, double* p, double* Ap, double* reduce_array)
+    const double* s_y, double* p, double* Ap, double* reduce_array,
+    const int nneighbours, const int* neighbours_ii, const int* neighbours_jj)
 {
   START_PROFILING(&compute_profile);
   int nblocks = ceil(nx*ny/(double)NTHREADS);

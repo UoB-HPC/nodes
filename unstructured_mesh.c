@@ -9,6 +9,7 @@
  * working and then it can be incorporated into the multi-package application
  * at some point */
 
+ #if 0
 // Build an unstructured mesh
 void build_unstructured_mesh(
     UnstructuredMesh* mesh, const int global_nx, const int global_ny, 
@@ -116,6 +117,7 @@ void build_unstructured_mesh(
 
   printf("unstructured cartesian data initialised\n");
 }
+#endif // if 0
 
 
 #if 0
