@@ -92,14 +92,15 @@ double initialise_cg(
   for(int ii = PAD; ii < ny-PAD; ++ii) {
 #pragma omp simd
     for(int jj = PAD; jj < nx-PAD; ++jj) {
-      const int nii = neighbours_ii[(ii)*nx*nneighbours+(jj)*nneighbours+NORTH_STENCIL];
-      const int njj = neighbours_jj[(ii)*nx*nneighbours+(jj)*nneighbours+NORTH_STENCIL];
-      const int eii = neighbours_ii[(ii)*nx*nneighbours+(jj)*nneighbours+EAST_STENCIL];
-      const int ejj = neighbours_jj[(ii)*nx*nneighbours+(jj)*nneighbours+EAST_STENCIL];
-      const int sii = neighbours_ii[(ii)*nx*nneighbours+(jj)*nneighbours+SOUTH_STENCIL];
-      const int sjj = neighbours_jj[(ii)*nx*nneighbours+(jj)*nneighbours+SOUTH_STENCIL];
-      const int wii = neighbours_ii[(ii)*nx*nneighbours+(jj)*nneighbours+WEST_STENCIL];
-      const int wjj = neighbours_jj[(ii)*nx*nneighbours+(jj)*nneighbours+WEST_STENCIL];
+      const int neighbour_index = (ii)*nx*nneighbours+(jj)*nneighbours;
+      const int nii = neighbours_ii[neighbour_index+NORTH_STENCIL];
+      const int njj = neighbours_jj[neighbour_index+NORTH_STENCIL];
+      const int eii = neighbours_ii[neighbour_index+EAST_STENCIL];
+      const int ejj = neighbours_jj[neighbour_index+EAST_STENCIL];
+      const int sii = neighbours_ii[neighbour_index+SOUTH_STENCIL];
+      const int sjj = neighbours_jj[neighbour_index+SOUTH_STENCIL];
+      const int wii = neighbours_ii[neighbour_index+WEST_STENCIL];
+      const int wjj = neighbours_jj[neighbour_index+WEST_STENCIL];
 
       r[(ii)*nx+(jj)] = x[(ii)*nx+(jj)] -
         ((s_y[(ii)*nx+(jj)]+s_x[(ii)*(nx+1)+(jj)]+1.0+
@@ -142,7 +143,7 @@ double calculate_pAp(
       const int wjj = neighbours_jj[(ii)*nx*nneighbours+(jj)*nneighbours+WEST_STENCIL];
 
       Ap[(ii)*nx+(jj)] = 
-        (s_y[(ii)*nx+(jj)]+s_x[(eii)*(nx+1)+(ejj)]+1.0+
+        (s_y[(ii)*nx+(jj)]+s_x[(ii)*(nx+1)+(jj)]+1.0+
          s_x[(eii)*(nx+1)+(ejj)]+s_y[(nii)*nx+(njj)])*p[(ii)*nx+(jj)]
         - s_y[(ii)*nx+(jj)]*p[(sii)*nx+(sjj)]
         - s_x[(ii)*(nx+1)+(jj)]*p[(wii)*nx+(wjj)] 
