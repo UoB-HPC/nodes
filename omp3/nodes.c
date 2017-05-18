@@ -58,7 +58,7 @@ void solve_unstructured_diffusion_2d(
 }
 
 void initialise_neighbour_list(
-    const int nx, const int ny, const int* neighbours_ii, const int* neighbours_jj)
+    const int nx, const int ny, int* neighbours_ii, int* neighbours_jj)
 {
   for(int ii = PAD; ii < ny-PAD; ++ii) {
     for(int jj = PAD; jj < nx-PAD; ++jj) {
