@@ -6,13 +6,14 @@
 extern "C" {
 #endif
 
-  // performs the cg solve, you always want to perform these steps, regardless
-  // of the context of the problem etc.
-  void solve_unstructured_diffusion_2d(
-      const int local_nx, const int local_ny, const int negdes, 
-      const double* vertices_x, const double* vertices_y, const int* cells_vertices, 
-      const int* nfaces, const double* density, const int* cells_indirection1, 
-      const int* cells_indirection2, const int* edges, double* energy);
+// Performs the CG solve
+void solve_unstructured_diffusion_2d(
+    const int nx, const int ny, Mesh* mesh, const int max_inners, const double dt, 
+    const double heat_capacity, const double conductivity,
+    double* x, double* r, double* p, double* rho, double* s_x, double* s_y, 
+    double* Ap, int* end_niters, double* end_error, double* reduce_array,
+    const double* edgedx, const double* edgedy, const int nneighbours, 
+    int* neighbours_ii, int* neighbours_jj);
 
 #ifdef __cplusplus
 }

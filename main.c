@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <omp.h>
 #include "nodes_interface.h"
-#include "unstructured_mesh.h"
+#include "nodes_data.h"
 #include "../profiler.h"
 #include "../comms.h"
 #include "../shared.h"
@@ -13,42 +13,55 @@
 
 int main(int argc, char** argv) 
 {
-  if(argc < 4) {
-    TERMINATE("Usage: ./nodes.exe <nx> <ny> <niters>\n");
+  if(argc < 2) {
+    TERMINATE("Usage: ./nodes.exe <parameter_filename>\n");
   }
 
   Mesh mesh = {0};
-  mesh.global_nx = atoi(argv[1]);
-  mesh.global_ny = atoi(argv[2]);
-  mesh.local_nx = atoi(argv[1]) + 2*PAD;
-  mesh.local_ny = atoi(argv[2]) + 2*PAD;
+  const char* nodes_params = argv[1];
+  mesh.global_nx = get_int_parameter("nx", nodes_params);
+  mesh.global_ny = get_int_parameter("ny", nodes_params);
+  mesh.local_nx = mesh.global_nx + 2*PAD;
+  mesh.local_ny = mesh.global_ny + 2*PAD;
   mesh.width = get_double_parameter("width", ARCH_ROOT_PARAMS);
   mesh.height = get_double_parameter("height", ARCH_ROOT_PARAMS);
-  mesh.dt = get_double_parameter("max_dt", ARCH_ROOT_PARAMS);
   mesh.sim_end = get_double_parameter("sim_end", ARCH_ROOT_PARAMS);
+  mesh.dt = get_double_parameter("max_dt", ARCH_ROOT_PARAMS);
   mesh.rank = MASTER;
   mesh.nranks = 1;
-  mesh.niters = atoi(argv[3]);
+  mesh.niters = get_int_parameter("iterations", nodes_params);
+  const int max_inners = get_int_parameter("max_inners", nodes_params);
+  const int visit_dump = get_int_parameter("visit_dump", nodes_params);
 
-  UnstructuredMesh unstructured_mesh;
-  build_unstructured_mesh(
-      &unstructured_mesh, mesh.global_nx, mesh.global_ny, mesh.local_nx, mesh.local_ny);
 
   initialise_mpi(argc, argv, &mesh.rank, &mesh.nranks);
   initialise_devices(mesh.rank);
   initialise_comms(&mesh);
   initialise_mesh_2d(&mesh);
 
+  NodesData nodes_data = {0};
+  initialise_nodes_data(
+      &nodes_data, mesh.local_nx, mesh.local_ny, NNEIGHBOURS_STENCIL, nodes_params);
+
   SharedData shared_data = {0};
   initialise_shared_data_2d(
-      mesh.global_nx, mesh.global_ny, mesh.local_nx, mesh.local_ny, 
-      mesh.x_off, mesh.y_off, &shared_data);
+      mesh.global_nx, mesh.global_ny, mesh.local_nx, mesh.local_ny, mesh.x_off, 
+      mesh.y_off, mesh.width, mesh.height, nodes_params, mesh.edgex, 
+      mesh.edgey, &shared_data);
 
-#if 0
-  write_all_ranks_to_visit(
-      mesh.global_nx+2*PAD, mesh.global_ny+2*PAD, mesh.local_nx, mesh.local_ny, mesh.x_off, 
-      mesh.y_off, mesh.rank, mesh.nranks, mesh.neighbours, shared_data.x, "final_result", 0, 0.0);
-#endif // if 0
+  handle_boundary_2d(
+      mesh.local_nx, mesh.local_ny, &mesh, shared_data.rho, NO_INVERT, PACK);
+  handle_boundary_2d(
+      mesh.local_nx, mesh.local_ny, &mesh, shared_data.e, NO_INVERT, PACK);
+  handle_boundary_2d(
+      mesh.local_nx, mesh.local_ny, &mesh, shared_data.x, NO_INVERT, PACK);
+
+  if(visit_dump) {
+    write_all_ranks_to_visit(
+        mesh.global_nx+2*PAD, mesh.global_ny+2*PAD, mesh.local_nx, mesh.local_ny, 
+        mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, mesh.neighbours, 
+        shared_data.x, "final_result", 0, 0.0);
+  }
 
   int tt = 0;
   double elapsed_sim_time = 0.0;
@@ -59,23 +72,23 @@ int main(int argc, char** argv)
       printf("step %d\n", tt+1);
     }
 
-    const double w0 = omp_get_wtime();
+    double w0 = omp_get_wtime();
 
     int end_niters = 0;
     double end_error = 0.0;
-
     solve_unstructured_diffusion_2d(
-        mesh.local_nx, mesh.local_ny, unstructured_mesh.nedges, 
-        unstructured_mesh.vertices_x, unstructured_mesh.vertices_y, 
-        unstructured_mesh.cells_vertices, 
-        unstructured_mesh.nfaces, unstructured_mesh.density, 
-        unstructured_mesh.cells_indirection1, unstructured_mesh.cells_indirection2, 
-        unstructured_mesh.edges, unstructured_mesh.energy);
+        mesh.local_nx, mesh.local_ny, &mesh, max_inners, mesh.dt, 
+        nodes_data.heat_capacity, nodes_data.conductivity,  shared_data.x, 
+        shared_data.r, shared_data.p, shared_data.rho, shared_data.s_x, 
+        shared_data.s_y, shared_data.Ap, &end_niters, &end_error, 
+        shared_data.reduce_array0, mesh.edgedx, mesh.edgedy, 
+        nodes_data.nneighbours, nodes_data.neighbours_ii, nodes_data.neighbours_jj);
 
     wallclock += omp_get_wtime()-w0;
 
     if(mesh.rank == MASTER) {
-      printf("finished on diffusion iteration %d with error %e\n", end_niters, end_error);
+      printf("finished on diffusion iteration %d with error %e\n", 
+          end_niters, end_error);
     }
 
     elapsed_sim_time += mesh.dt;
@@ -89,14 +102,16 @@ int main(int argc, char** argv)
 
   if(mesh.rank == MASTER) {
     PRINT_PROFILING_RESULTS(&compute_profile);
-    printf("wallclock %.4f, elapsed simulation time %.4fs\n", wallclock, elapsed_sim_time);
+    printf("wallclock %.4fs, elapsed simulation time %.4fs\n", 
+        wallclock, elapsed_sim_time);
   }
 
-#if 0
-  write_all_ranks_to_visit(
-      mesh.global_nx+2*PAD, mesh.global_ny+2*PAD, mesh.local_nx, mesh.local_ny, mesh.x_off, 
-      mesh.y_off, mesh.rank, mesh.nranks, mesh.neighbours, shared_data.p, "final_result", 0, elapsed_sim_time);
-#endif // if 0
+  if(visit_dump) {
+    write_all_ranks_to_visit(
+        mesh.global_nx+2*PAD, mesh.global_ny+2*PAD, mesh.local_nx, mesh.local_ny, 
+        mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, mesh.neighbours, 
+        shared_data.x, "final_result", 1, elapsed_sim_time);
+  }
 
   finalise_shared_data(&shared_data);
   finalise_mesh(&mesh);
