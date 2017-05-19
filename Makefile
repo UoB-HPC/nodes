@@ -3,8 +3,8 @@ KERNELS 	  			 = omp3
 COMPILER    			 = INTEL
 MPI								 = no
 DECOMP						 = TILES
-ARCH_COMPILER_CC   = cc#/lus/scratch/p02185/apps/llvm/build/bin/clang
-ARCH_COMPILER_CPP  = CC#/lus/scratch/p02185/apps/llvm/build/bin/clang++
+ARCH_COMPILER_CC   = mpiicc
+ARCH_COMPILER_CPP  = mpiicpc
 OPTIONS		  			 = -DENABLE_PROFILING 
 
 # Compiler-specific flags
