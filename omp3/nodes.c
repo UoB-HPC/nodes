@@ -57,24 +57,6 @@ void solve_unstructured_diffusion_2d(
   *end_error = global_old_r2;
 }
 
-void initialise_neighbour_list(
-    const int nx, const int ny, int* neighbours_ii, int* neighbours_jj)
-{
-  for(int ii = PAD; ii < ny-PAD; ++ii) {
-    for(int jj = PAD; jj < nx-PAD; ++jj) {
-      // Manual 5pt stencil
-      neighbours_ii[NORTH_STENCIL*nx*ny+(ii)*nx+(jj)] = (ii+1);
-      neighbours_ii[EAST_STENCIL*nx*ny+(ii)*nx+(jj)] = (ii);
-      neighbours_ii[SOUTH_STENCIL*nx*ny+(ii)*nx+(jj)] = (ii-1);
-      neighbours_ii[WEST_STENCIL*nx*ny+(ii)*nx+(jj)] = (ii);
-      neighbours_jj[NORTH_STENCIL*nx*ny+(ii)*nx+(jj)] = (jj);
-      neighbours_jj[EAST_STENCIL*nx*ny+(ii)*nx+(jj)] = (jj+1);
-      neighbours_jj[SOUTH_STENCIL*nx*ny+(ii)*nx+(jj)] = (jj);
-      neighbours_jj[WEST_STENCIL*nx*ny+(ii)*nx+(jj)] = (jj-1);
-    }
-  }
-}
-
 // Initialises the CG solver
 double initialise_cg(
     const int nx, const int ny, const double dt, const double conductivity,
@@ -224,39 +206,4 @@ void print_vec(
     printf("\n");
   }
 }
-
-#if 0
-/* At this stage we can consider our unstructured data well initialised.
- *
- * The steps needed to determine the coefficients of the sparse coefficient 
- * matrix are:
- *    (1) Determine the gradients across each face
- *    (2) Determine the second gradients
- *    (3) Calculate the harmonic mean of the density
- *    (4) Initialise the sparse matrix with the data
- * */
-
-/* We are absolutely 100% making the assumption that the grid is not
- * orthogonally partitioned, which means we will use the derivation that
- * incorporates a transformation to the basis of the face normal and 
- * perpendicular vectors, even though in practice the actual vectors
- * will be orthogonal. */
-
-// Determine the gradients across each face
-for(int ii = 0; ii < nedges; ++ii) {
-  // Fetch the two cells that border the face
-  const int cell1 = cells_indirection1[ii];
-  const int cell2 = cells_indirection2[ii];
-
-  // TODO: is it correct behaviour here to just leave?
-  // Check that we aren't at a boundary, in which case just leave??
-  if(cell1 == EDGE || cell2 == EDGE) {
-    continue;
-  }
-
-#if 0
-  grad_edge[] = ;
-#endif // if 0
-}
-#endif // if 0
 

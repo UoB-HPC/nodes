@@ -25,69 +25,78 @@ void initialise_nodes_data(
   initialise_neighbour_list(nx, ny, nodes_data->neighbours_ii, nodes_data->neighbours_jj);
 }
 
-#if 0
 // Build an unstructured mesh
-void build_unstructured_mesh(
+void build_unstructured_quad_mesh(
     UnstructuredMesh* mesh, const int global_nx, const int global_ny, 
     const int nx, const int ny)
 {
+  if(NFACES != 4) {
+    TERMINATE("Only implemented for quads currently.");
+  }
+
+  mesh->nedges = 2*nx*ny+nx+ny;
+
   allocate_data(&mesh->vertices_x, (nx+1)*(ny+1));
   allocate_data(&mesh->vertices_y, (nx+1)*(ny+1));
-  allocate_data(&mesh->cell_centers_x, nx*ny);
-  allocate_data(&mesh->cell_centers_y, nx*ny);
   allocate_data(&mesh->density, nx*ny);
   allocate_data(&mesh->energy, nx*ny);
-  mesh->nedges = ((2*nx+1)*ny)-(nx+1);
 
-  mesh->nfaces = (int*)malloc(sizeof(int)*nx*ny);
-  mesh->cells_indirection1 = (int*)malloc(sizeof(int)*mesh->nedges);
-  mesh->cells_indirection2 = (int*)malloc(sizeof(int)*mesh->nedges);
-  mesh->edges = (int*)malloc(sizeof(int)*nx*ny*NFACES);
+  // The area in each dimension of the face
+  allocate_int_data(&mesh->face_area_x, mesh->nedges);
+  allocate_int_data(&mesh->face_area_y, mesh->nedges);
 
-  // This artificial problem have four faces per cell
-  for(int ii = 0; ii < nx*ny; ++ii) {
-    mesh->nfaces[ii] = NFACES;
-  }
+  // Ordered by face_vertex_0 is closest to bottom left
+  allocate_int_data(&mesh->face_vertex_0, mesh->nedges);
+  allocate_int_data(&mesh->face_vertex_1, mesh->nedges);
 
-  // Get the number of vertices attached to cells
-  mesh->ncell_vertices = 0;
-  for(int ii = 0; ii < ny; ++ii) {
-    for(int jj = 0; jj < nx; ++jj) {
-      const int cell_index = (ii*nx)+(jj);
-      mesh->ncell_vertices += mesh->nfaces[cell_index];
-    }
-  }
+  // Just setting all cells to have same number of faces
+  const int nfaces = NFACES;
 
-  mesh->cells_vertices = (int*)malloc(sizeof(int)*mesh->ncell_vertices);
-
-  /* Simply faking the unstructured mesh here, presumably it would be generated 
-   * by some sort of parallel mesh generator */
-
-  // Construct the list of vertices
+  // Construct the list of vertices contiguously
   for(int ii = 0; ii < (ny+1); ++ii) {
     for(int jj = 0; jj < (nx+1); ++jj) {
-      const int index = ii*(nx+1)+jj;
-      mesh->vertices_x[index] = (double)(jj-PAD)*(mesh->width/(double)global_nx);
-      mesh->vertices_y[index] = (double)(ii-PAD)*(mesh->height/(double)global_ny);
+      const int index = (ii)*(nx+1)+(jj);
+      mesh->vertices_x[index] = (double)((jj)-PAD)*(mesh->width/(double)global_nx);
+      mesh->vertices_y[index] = (double)((ii)-PAD)*(mesh->height/(double)global_ny);
     }
   }
 
-  int ncell_vertices = 0;
+  // Calculate the vertices connecting each face, we step through from bottom 
+  // left all the way to top right
+  for(int ii = 0; ii < ny+1; ++ii) {
+    for(int jj = 0; jj < nx; ++jj) {
+      const int face_index = ii*(2*nx+1)+jj;
+      mesh->face_area_x[face_index] = 
+        mesh->vertices_x[face_index+1]-mesh->vertices_x[face_index];
+      mesh->face_area_y[face_indey] = 
+        mesh->vertices_y[face_indey+1]-mesh->vertices_y[face_indey];
+      mesh->face_vertex_0[face_index] = face_index;
+      mesh->face_vertex_0[face_index] = face_index+1;
+    }
+    if(ii < ny) {
+      for(int jj = 0; jj < nx+1; ++jj) {
+        const int face_index = ii*(2*nx+1)+jj+nx;
+        mesh->face_area_x[face_index] = 
+          mesh->vertices_x[face_index+nx]-mesh->vertices_x[face_index];
+        mesh->face_area_y[face_indey] = 
+          mesh->vertices_y[face_indey+nx]-mesh->vertices_y[face_indey];
+        mesh->face_vertex_0[face_index] = face_index;
+        mesh->face_vertex_0[face_index] = face_index+nx;
+      }
+    }
+  }
+
+  allocate_int_data(&mesh->cells_faces, nx*ny);
+
+  // Initialise cells connecting faces
   for(int ii = 0; ii < ny; ++ii) {
     for(int jj = 0; jj < nx; ++jj) {
-      const int cell_index = (ii*nx)+(jj);
-      //for(int ii = 0; ii < mesh->nfaces[cell_index]; ++ii) {
-      // The ordering here is clockwise and essential for later routines
-      mesh->cells_vertices[ncell_vertices++] = (ii*(nx+1))+(jj);
-      mesh->cells_vertices[ncell_vertices++] = (ii*(nx+1))+(jj+nx);
-      mesh->cells_vertices[ncell_vertices++] = ((ii+1)*(nx+1))+(jj+nx+1);
-      mesh->cells_vertices[ncell_vertices++] = ((ii+1)*(nx+1))+(jj);
-      //}
+
     }
   }
 
-  /* This operation can be done in a general way, by solving the equation of 
-   * the lines created by the individual vertices crossing */
+  allocate_data(&mesh->cell_centers_x, nx*ny);
+  allocate_data(&mesh->cell_centers_y, nx*ny);
 
   // Find the (x,y) location of each of the cell centers
   int vertex_index = 0;
@@ -98,7 +107,6 @@ void build_unstructured_mesh(
       double A = 0.0;
       double c_x_factor = 0.0;
       double c_y_factor = 0.0;
-      const int nfaces = mesh->nfaces[cell_index];
       for(int kk = 0; kk < nfaces; ++kk) {
         const int vertex_index0 = 
           mesh->cells_vertices[vertex_index];
@@ -121,17 +129,6 @@ void build_unstructured_mesh(
       mesh->cell_centers_y[cell_index] = (1.0/(6.0*0.5*A))*c_y_factor;
     }
   }
-
-  for(int ii = 0; ii < ny; ++ii) {
-    for(int jj = 0; jj < nx; ++jj) {
-      const int cell_index = (ii*nx)+(jj);
-      printf("(%f, %f) ", 
-          mesh->cell_centers_x[cell_index], mesh->cell_centers_y[cell_index]);
-    }
-    printf("\n");
-  }
-
-  printf("unstructured cartesian data initialised\n");
 }
 
 
@@ -162,3 +159,36 @@ for(int ii = 0; ii < ny+1; ++ii) {
 #endif // if 0
 #endif // if 0
 
+#if 0
+allocate_int_data(&mesh->nfaces, nx*ny);
+for(int ii = 0; ii < nx*ny; ++ii) {
+  mesh->nfaces[ii] = NFACES;
+}
+#endif // if 0
+
+#if 0
+// Get the number of vertices attached to cells
+mesh->ncell_vertices = 0;
+for(int ii = 0; ii < ny; ++ii) {
+  for(int jj = 0; jj < nx; ++jj) {
+    const int cell_index = (ii*nx)+(jj);
+    mesh->ncell_vertices += mesh->nfaces[cell_index];
+  }
+}
+
+mesh->cells_vertices = (int*)malloc(sizeof(int)*mesh->ncell_vertices);
+
+/* This operation can be done in a general way, by solving the equation of 
+ * the lines created by the individual vertices crossing */
+
+for(int ii = 0; ii < ny; ++ii) {
+  for(int jj = 0; jj < nx; ++jj) {
+    const int cell_index = (ii*nx)+(jj);
+    printf("(%f, %f) ", 
+        mesh->cell_centers_x[cell_index], mesh->cell_centers_y[cell_index]);
+  }
+  printf("\n");
+}
+
+printf("unstructured cartesian data initialised\n");
+#endif // if 0
