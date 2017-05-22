@@ -41,7 +41,8 @@ int main(int argc, char** argv)
 
   NodesData nodes_data = {0};
   initialise_nodes_data(
-      &nodes_data, mesh.local_nx, mesh.local_ny, NNEIGHBOURS_STENCIL, nodes_params);
+      &nodes_data, mesh.global_nx, mesh.global_ny, mesh.local_nx, mesh.local_ny, 
+      NNEIGHBOURS_STENCIL, nodes_params);
 
   SharedData shared_data = {0};
   initialise_shared_data_2d(

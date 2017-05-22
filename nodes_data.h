@@ -1,5 +1,5 @@
 
-#define NFACES 4
+#define NEDGES 4
 #define ARCH_ROOT_PARAMS "../arch.params"
 #define NODES_PARAMS "nodes.params"
 
@@ -7,6 +7,7 @@
 #define NNEIGHBOURS_STENCIL 5
 
 enum { NORTH_STENCIL, EAST_STENCIL, SOUTH_STENCIL, WEST_STENCIL };
+enum { BOTTOM_LEFT, BOTTOM_RIGHT, TOP_LEFT, TOP_RIGHT };
 
 typedef struct {
   int nneighbours;
@@ -18,9 +19,26 @@ typedef struct {
 
 } NodesData;
 
+typedef struct {
+
+  double* vertices_x;
+  double* vertices_y;
+  double* cell_centers_x;
+  double* cell_centers_y;
+  int* cells_vertices;
+  int* edge_vertex0;
+  int* edge_vertex1;
+  int* cells_edges;
+
+  double width;
+  double height;
+  int nedges;
+
+} UnstructuredMesh;
+
 void initialise_nodes_data(
-    NodesData* nodes_data, const int nx, const int ny, const int nneighbours, 
-    const char* nodes_params);
+    NodesData* nodes_data, const int global_nx, const int global_ny, 
+    const int nx, const int ny, const int nneighbours, const char* nodes_params);
 
 #if 0
 typedef struct {
