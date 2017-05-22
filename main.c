@@ -33,16 +33,16 @@ int main(int argc, char** argv)
   const int max_inners = get_int_parameter("max_inners", nodes_params);
   const int visit_dump = get_int_parameter("visit_dump", nodes_params);
 
-
   initialise_mpi(argc, argv, &mesh.rank, &mesh.nranks);
   initialise_devices(mesh.rank);
   initialise_comms(&mesh);
-  initialise_mesh_2d(&mesh);
+
+  UnstructuredMesh unstructured_mesh;
+  initialise_unstructured_quad_mesh_2d(&unstructured_mesh, &mesh);
 
   NodesData nodes_data = {0};
   initialise_nodes_data(
-      &nodes_data, mesh.global_nx, mesh.global_ny, mesh.local_nx, mesh.local_ny, 
-      NNEIGHBOURS_STENCIL, nodes_params);
+      &nodes_data, mesh.local_nx, mesh.local_ny, NNEIGHBOURS_STENCIL, nodes_params);
 
   SharedData shared_data = {0};
   initialise_shared_data_2d(
@@ -82,8 +82,7 @@ int main(int argc, char** argv)
         nodes_data.heat_capacity, nodes_data.conductivity,  shared_data.x, 
         shared_data.r, shared_data.p, shared_data.rho, shared_data.s_x, 
         shared_data.s_y, shared_data.Ap, &end_niters, &end_error, 
-        shared_data.reduce_array0, mesh.edgedx, mesh.edgedy, 
-        nodes_data.nneighbours, nodes_data.neighbours_ii, nodes_data.neighbours_jj);
+        shared_data.reduce_array0, mesh.edgedx, mesh.edgedy);
 
     wallclock += omp_get_wtime()-w0;
 

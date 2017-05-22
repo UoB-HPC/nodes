@@ -1,8 +1,12 @@
+#ifndef __NODESDATAHDR
+#define __NODESDATAHDR
+
+#include "../mesh.h"
 
 #define NEDGES 4
+#define NNEIGHBOURS 6   // This is max size required - for 3d
 #define ARCH_ROOT_PARAMS "../arch.params"
 #define NODES_PARAMS "nodes.params"
-
 #define EPS 1.0e-10
 #define NNEIGHBOURS_STENCIL 5
 
@@ -10,9 +14,6 @@ enum { NORTH_STENCIL, EAST_STENCIL, SOUTH_STENCIL, WEST_STENCIL };
 enum { BOTTOM, LEFT, RIGHT, TOP };
 
 typedef struct {
-  int nneighbours;
-  int* neighbours_ii;
-  int* neighbours_jj;
 
   double heat_capacity;
   double conductivity;
@@ -21,6 +22,7 @@ typedef struct {
 
 typedef struct {
 
+  // Handles unstructured mesh
   double* vertices_x;
   double* vertices_y;
   double* cell_centroids_x;
@@ -30,13 +32,17 @@ typedef struct {
   int* edge_vertex1;
   int* cells_edges;
 
-  double width;
-  double height;
   int nedges;
 
 } UnstructuredMesh;
 
 void initialise_nodes_data(
-    NodesData* nodes_data, const int global_nx, const int global_ny, 
-    const int nx, const int ny, const int nneighbours, const char* nodes_params);
+    NodesData* nodes_data, const int nx, const int ny, 
+    const int nneighbours, const char* nodes_params);
+
+// Build an unstructured mesh
+void initialise_unstructured_quad_mesh_2d(
+    UnstructuredMesh* unstructured_mesh, Mesh* mesh);
+
+#endif
 
