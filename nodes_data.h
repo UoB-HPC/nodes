@@ -7,7 +7,7 @@
 #define NNEIGHBOURS_STENCIL 5
 
 enum { NORTH_STENCIL, EAST_STENCIL, SOUTH_STENCIL, WEST_STENCIL };
-enum { BOTTOM_LEFT, BOTTOM_RIGHT, TOP_LEFT, TOP_RIGHT };
+enum { BOTTOM, LEFT, RIGHT, TOP };
 
 typedef struct {
   int nneighbours;

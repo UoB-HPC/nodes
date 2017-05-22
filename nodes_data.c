@@ -74,42 +74,30 @@ void build_unstructured_quad_mesh(
   // left all the way to top right
   for(int ii = 0; ii < ny+1; ++ii) {
     for(int jj = 0; jj < nx; ++jj) {
-      const int edge_index = ii*(2*nx+1)+jj;
-      mesh->edge_vertex0[edge_index] = (ii)*nx+(jj);
-      mesh->edge_vertex1[edge_index] = (ii)*nx+(jj+1);
-
-      printf("edge_vertex x_edge %d (%d %d)\n",
-          edge_index, mesh->edge_vertex0[edge_index], mesh->edge_vertex1[edge_index]);
+      const int edge_index = (ii)*(2*nx+1)+(jj);
+      mesh->edge_vertex0[edge_index] = (ii)*(nx+1)+(jj);
+      mesh->edge_vertex1[edge_index] = (ii)*(nx+1)+(jj+1);
     }
     if(ii < ny) {
       for(int jj = 0; jj < nx+1; ++jj) {
-        const int edge_index = ii*(2*nx+1)+jj+nx;
-        mesh->edge_vertex0[edge_index] = (ii)*nx+(jj);
-        mesh->edge_vertex1[edge_index] = (ii+1)*nx+(jj);
-
-        printf("edge_vertex y_edge %d (%d %d)\n",
-            edge_index, mesh->edge_vertex0[edge_index], mesh->edge_vertex1[edge_index]);
+        const int edge_index = (ii)*(2*nx+1)+(jj)+nx;
+        mesh->edge_vertex0[edge_index] = (ii)*(nx+1)+(jj);
+        mesh->edge_vertex1[edge_index] = (ii+1)*(nx+1)+(jj);
       }
     }
   }
 
-  // TODO: Are the naming conventions here even reasonable
+  // TODO: Make sure that the memory order of the cells_edges array is
+  // optimal for all architectures
   allocate_int_data(&mesh->cells_edges, nedges*nx*ny);
 
   // Initialise cells connecting edges
   for(int ii = 0; ii < ny; ++ii) {
     for(int jj = 0; jj < nx; ++jj) {
-      mesh->cells_edges[BOTTOM_LEFT*nx*ny+(ii)*nx+(jj)] = (ii)*nx+(jj);
-      mesh->cells_edges[BOTTOM_RIGHT*nx*ny+(ii)*nx+(jj)] = (ii)*nx+(jj+1);
-      mesh->cells_edges[TOP_LEFT*nx*ny+(ii)*nx+(jj)] = (ii+1)*nx+(jj);
-      mesh->cells_edges[TOP_RIGHT*nx*ny+(ii)*nx+(jj)] = (ii+1)*nx+(jj+1);
-
-      printf("cells_edges %d (%d %d %d %d)\n",
-          (ii)*nx+(jj), 
-          mesh->cells_edges[BOTTOM_LEFT*nx*ny+(ii)*nx+(jj)],
-          mesh->cells_edges[BOTTOM_RIGHT*nx*ny+(ii)*nx+(jj)],
-          mesh->cells_edges[TOP_LEFT*nx*ny+(ii)*nx+(jj)],
-          mesh->cells_edges[TOP_RIGHT*nx*ny+(ii)*nx+(jj)]);
+      mesh->cells_edges[BOTTOM*nx*ny+(ii)*nx+(jj)] = (ii)*(2*nx+1)+(jj);
+      mesh->cells_edges[LEFT*nx*ny+(ii)*nx+(jj)] = mesh->cells_edges[BOTTOM*nx*ny+(ii)*nx+(jj)]+nx;
+      mesh->cells_edges[RIGHT*nx*ny+(ii)*nx+(jj)] = mesh->cells_edges[LEFT*nx*ny+(ii)*nx+(jj)]+1;
+      mesh->cells_edges[TOP*nx*ny+(ii)*nx+(jj)] = mesh->cells_edges[RIGHT*nx*ny+(ii)*nx+(jj)]+nx;
     }
   }
 
@@ -126,21 +114,29 @@ void build_unstructured_quad_mesh(
       double c_y_factor = 0.0;
 
       for(int kk = 0; kk < nedges; ++kk) {
-        const int edge_index = mesh->cells_edges[kk*nx*ny+cell_index];
+        const int edge_index = mesh->cells_edges[(kk)*nx*ny+cell_index];
         const int edge_vertex0 = mesh->edge_vertex0[edge_index];
-        const int edge_vertex1 = mesh->edge_vertex0[edge_index];
+        const int edge_vertex1 = mesh->edge_vertex1[edge_index];
         const double x0 = mesh->vertices_x[edge_vertex0];
         const double y0 = mesh->vertices_y[edge_vertex0];
         const double x1 = mesh->vertices_x[edge_vertex1];
         const double y1 = mesh->vertices_y[edge_vertex1];
 
-        A += (x0*y1-x1*y0);
+        printf("%.4f %.4f %.4f %.4f\n", x0, y0, x1, y1);
+
+        A += 0.5*(x0*y1-x1*y0);
         c_x_factor += (x0+x1)*(x0*y1-x1*y0);
         c_y_factor += (y0+y1)*(x0*y1-x1*y0);
       }
 
-      mesh->cell_centers_x[cell_index] = (1.0/(6.0*0.5*A))*c_x_factor;
-      mesh->cell_centers_y[cell_index] = (1.0/(6.0*0.5*A))*c_y_factor;
+      mesh->cell_centers_x[cell_index] = (1.0/(6.0*A))*c_x_factor;
+      mesh->cell_centers_y[cell_index] = (1.0/(6.0*A))*c_y_factor;
+
+
+      printf("cell_centroids %d (%.4f %.4f)\n",
+          cell_index,
+          mesh->cell_centers_x[cell_index],
+          mesh->cell_centers_y[cell_index]);
     }
   }
 }
