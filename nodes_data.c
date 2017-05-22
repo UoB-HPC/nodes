@@ -64,9 +64,6 @@ void build_unstructured_quad_mesh(
       const int index = (ii)*(nx+1)+(jj);
       mesh->vertices_x[index] = (double)((jj)-PAD)*(mesh->width/(double)global_nx);
       mesh->vertices_y[index] = (double)((ii)-PAD)*(mesh->height/(double)global_ny);
-
-      printf("vertex %d (%.4f %.4f)\n", 
-          index, mesh->vertices_x[index], mesh->vertices_y[index]);
     }
   }
 
@@ -101,10 +98,10 @@ void build_unstructured_quad_mesh(
     }
   }
 
-  allocate_data(&mesh->cell_centers_x, nx*ny);
-  allocate_data(&mesh->cell_centers_y, nx*ny);
+  allocate_data(&mesh->cell_centroids_x, nx*ny);
+  allocate_data(&mesh->cell_centroids_y, nx*ny);
 
-  // Find the (x,y) location of each of the cell centers
+  // Find the (x,y) location of each of the cell centroids
   for(int ii = 0; ii < ny; ++ii) {
     for(int jj = 0; jj < nx; ++jj) {
       const int cell_index = (ii)*nx+(jj);
@@ -114,29 +111,28 @@ void build_unstructured_quad_mesh(
       double c_y_factor = 0.0;
 
       for(int kk = 0; kk < nedges; ++kk) {
-        const int edge_index = mesh->cells_edges[(kk)*nx*ny+cell_index];
-        const int edge_vertex0 = mesh->edge_vertex0[edge_index];
-        const int edge_vertex1 = mesh->edge_vertex1[edge_index];
-        const double x0 = mesh->vertices_x[edge_vertex0];
-        const double y0 = mesh->vertices_y[edge_vertex0];
-        const double x1 = mesh->vertices_x[edge_vertex1];
-        const double y1 = mesh->vertices_y[edge_vertex1];
+        int edge_index = mesh->cells_edges[kk*nx*ny+cell_index];
+        int edge_vertex0 = mesh->edge_vertex0[edge_index];
+        int edge_vertex1 = mesh->edge_vertex1[edge_index];
 
-        printf("%.4f %.4f %.4f %.4f\n", x0, y0, x1, y1);
+        // The top and left vertices need to be ordered backwards to ensure
+        // correct counter-clockwise access
+        double x0 = (kk == TOP || kk == LEFT) ? 
+          mesh->vertices_x[edge_vertex1] : mesh->vertices_x[edge_vertex0];
+        double y0 = (kk == TOP || kk == LEFT) ?
+          mesh->vertices_y[edge_vertex1] : mesh->vertices_y[edge_vertex0];
+        double x1 = (kk == TOP || kk == LEFT) ?
+          mesh->vertices_x[edge_vertex0] : mesh->vertices_x[edge_vertex1];
+        double y1 = (kk == TOP || kk == LEFT) ?
+          mesh->vertices_y[edge_vertex0] : mesh->vertices_y[edge_vertex1];
 
         A += 0.5*(x0*y1-x1*y0);
         c_x_factor += (x0+x1)*(x0*y1-x1*y0);
         c_y_factor += (y0+y1)*(x0*y1-x1*y0);
       }
 
-      mesh->cell_centers_x[cell_index] = (1.0/(6.0*A))*c_x_factor;
-      mesh->cell_centers_y[cell_index] = (1.0/(6.0*A))*c_y_factor;
-
-
-      printf("cell_centroids %d (%.4f %.4f)\n",
-          cell_index,
-          mesh->cell_centers_x[cell_index],
-          mesh->cell_centers_y[cell_index]);
+      mesh->cell_centroids_x[cell_index] = (1.0/(6.0*A))*c_x_factor;
+      mesh->cell_centroids_y[cell_index] = (1.0/(6.0*A))*c_y_factor;
     }
   }
 }
