@@ -36,13 +36,14 @@ int main(int argc, char** argv)
   initialise_mpi(argc, argv, &mesh.rank, &mesh.nranks);
   initialise_devices(mesh.rank);
   initialise_comms(&mesh);
+  initialise_mesh_2d(&mesh);
 
   UnstructuredMesh unstructured_mesh;
   initialise_unstructured_quad_mesh_2d(&unstructured_mesh, &mesh);
 
   NodesData nodes_data = {0};
   initialise_nodes_data(
-      &nodes_data, mesh.local_nx, mesh.local_ny, NNEIGHBOURS_STENCIL, nodes_params);
+      &nodes_data, nodes_params);
 
   SharedData shared_data = {0};
   initialise_shared_data_2d(

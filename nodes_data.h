@@ -36,9 +36,9 @@ typedef struct {
 
 } UnstructuredMesh;
 
+// Initialises the data specific to the nodes application
 void initialise_nodes_data(
-    NodesData* nodes_data, const int nx, const int ny, 
-    const int nneighbours, const char* nodes_params);
+    NodesData* nodes_data, const char* nodes_params);
 
 // Build an unstructured mesh
 void initialise_unstructured_quad_mesh_2d(

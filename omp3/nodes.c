@@ -14,13 +14,12 @@ void solve_unstructured_diffusion_2d(
     const double heat_capacity, const double conductivity,
     double* x, double* r, double* p, double* rho, double* s_x, double* s_y, 
     double* Ap, int* end_niters, double* end_error, double* reduce_array,
-    const double* edgedx, const double* edgedy, const int nneighbours, 
-    const int* neighbours_ii, const int* neighbours_jj)
+    const double* edgedx, const double* edgedy)
 {
   // Store initial residual
   double local_old_r2 = initialise_cg(
       nx, ny, dt, heat_capacity, conductivity, p, r, x, rho, s_x, s_y, edgedx, 
-      edgedy, nneighbours, neighbours_ii, neighbours_jj);
+      edgedy);
   double global_old_r2 = reduce_all_sum(local_old_r2);
 
   handle_boundary_2d(nx, ny, mesh, p, NO_INVERT, PACK);
@@ -30,8 +29,7 @@ void solve_unstructured_diffusion_2d(
   int ii = 0;
   for(ii = 0; ii < max_inners; ++ii) {
 
-    const double local_pAp = calculate_pAp(nx, ny, s_x, s_y, p, Ap, 
-        nneighbours, neighbours_ii, neighbours_jj);
+    const double local_pAp = calculate_pAp(nx, ny, s_x, s_y, p, Ap);
     const double global_pAp = reduce_all_sum(local_pAp);
     const double alpha = global_old_r2/global_pAp;
 
@@ -62,14 +60,57 @@ double initialise_cg(
     const int nx, const int ny, const double dt, const double conductivity,
     const double heat_capacity, double* p, double* r, const double* x, 
     const double* rho, double* s_x, double* s_y, const double* edgedx, 
-    const double* edgedy, const int nneighbours, const int* neighbours_ii, 
-    const int* neighbours_jj)
+    const double* edgedy)
 {
   START_PROFILING(&compute_profile);
 
+  // Going to initialise the coefficients here. This ensures that if the 
+  // density or mesh were changed by another package, that the coefficients
+  // are updated accordingly, making performance evaluation fairer.
+  
+  for(int ii = PAD; ii < ny-PAD; ++ii) {
+    for(int jj = PAD; jj < nx-PAD; ++jj) {
+      const int cell_index = (ii)*nx+(jj);
+      double k = 0.0;
+      
+      // TODO: In the future nedges will be dependent upon cell.
+      for(int ff = 0; ff < nedges; ++ff) {
+        const int neighbour_index = neighbours[(ff)*nx*ny+(cell_index)];
+        const double density0 = rho[(cell_index)];
+        const double density1 = rho[(neighbour_index)];
+
+        // Fetch the vertices for the current edge
+        const int edge_index = cells_edges[(ff)*nx*ny+(cell_index)];
+        const int vertex0 = edge_vertex0[(edge_index)];
+        const int vertex1 = edge_vertex1[(edge_index)];
+
+        // Calculate the distance between centroids
+        const double cell_centroid_x = cell_centroids_x[(cell_index)];
+        const double cell_centroid_y = cell_centroids_y[(cell_index)];
+        const double neighbour_centroid_x = cell_centroids_x[(neighbour_index)];
+        const double neighbour_centroid_y = cell_centroids_y[(neighbour_index)];
+        const double cell_dx = (neighbour_centroid_x-cell_centroid_x);
+        const double cell_dy = (neighbour_centroid_y-cell_centroid_y);
+        const double ds = sqrt(cell_dx*cell_dx+cell_dy*cell_dy);
+
+        // Calculate the unit vector joining cell centroids
+        const double es_x = cell_dx/ds;
+        const double es_y = cell_dy/ds;
+
+        // Calculate the area vector
+        const double A_x = -(vertices_x[vertex1]-vertices_x[vertex0]);
+        const double A_y = vertices_y[vertex1]-vertices_y[vertex0];
+
+        const double edge_density = (2.0*density0*density1)/(density0+density1);
+        const double diffusion_coeff = conductivity/(edge_density*heat_capacity);
+
+      }
+    }
+  }
+
   // https://inldigitallibrary.inl.gov/sti/3952796.pdf
   // Take the average of the coefficients at the cells surrounding 
-  // each face
+  // each edge
 #pragma omp parallel for
   for(int ii = PAD; ii < ny-PAD; ++ii) {
 #pragma omp simd
@@ -92,23 +133,13 @@ double initialise_cg(
   for(int ii = PAD; ii < ny-PAD; ++ii) {
 #pragma omp simd
     for(int jj = PAD; jj < nx-PAD; ++jj) {
-      const int neighbour_index = (ii)*nx*nneighbours+(jj)*nneighbours;
-      const int nii = neighbours_ii[neighbour_index+NORTH_STENCIL];
-      const int eii = neighbours_ii[neighbour_index+EAST_STENCIL];
-      const int sii = neighbours_ii[neighbour_index+SOUTH_STENCIL];
-      const int wii = neighbours_ii[neighbour_index+WEST_STENCIL];
-      const int njj = neighbours_jj[neighbour_index+NORTH_STENCIL];
-      const int ejj = neighbours_jj[neighbour_index+EAST_STENCIL];
-      const int sjj = neighbours_jj[neighbour_index+SOUTH_STENCIL];
-      const int wjj = neighbours_jj[neighbour_index+WEST_STENCIL];
-
       r[(ii)*nx+(jj)] = x[(ii)*nx+(jj)] -
         ((s_y[(ii)*nx+(jj)]+s_x[(ii)*(nx+1)+(jj)]+1.0+
-          s_x[(eii)*(nx+1)+(ejj)]+s_y[(nii)*nx+(njj)])*x[(ii)*nx+(jj)]
-         - s_y[(ii)*nx+(jj)]*x[(sii)*nx+(sjj)]
-         - s_x[(ii)*(nx+1)+(jj)]*x[(wii)*nx+(wjj)] 
-         - s_x[(eii)*(nx+1)+(ejj)]*x[(eii)*nx+(ejj)]
-         - s_y[(nii)*nx+(njj)]*x[(nii)*nx+(njj)]);
+          s_x[(ii)*(nx+1)+(jj+1)]+s_y[(ii+1)*nx+(jj)])*x[(ii)*nx+(jj)]
+         - s_y[(ii)*nx+(jj)]*x[(ii-1)*nx+(jj)]
+         - s_x[(ii)*(nx+1)+(jj)]*x[(ii)*nx+(jj-1)] 
+         - s_x[(ii)*(nx+1)+(jj+1)]*x[(ii)*nx+(jj+1)]
+         - s_y[(ii+1)*nx+(jj)]*x[(ii+1)*nx+(jj)]);
       p[(ii)*nx+(jj)] = r[(ii)*nx+(jj)];
       initial_r2 += r[(ii)*nx+(jj)]*r[(ii)*nx+(jj)];
     }
@@ -121,8 +152,7 @@ double initialise_cg(
 // Calculates a value for alpha
 double calculate_pAp(
     const int nx, const int ny, const double* s_x, const double* s_y,
-    double* p, double* Ap, const int nneighbours, const int* neighbours_ii, 
-    const int* neighbours_jj)
+    double* p, double* Ap)
 {
   START_PROFILING(&compute_profile);
 
@@ -133,23 +163,13 @@ double calculate_pAp(
   for(int ii = PAD; ii < ny-PAD; ++ii) {
 #pragma omp simd
     for(int jj = PAD; jj < nx-PAD; ++jj) {
-      const int neighbour_index = (ii)*nx*nneighbours+(jj)*nneighbours;
-      const int nii = neighbours_ii[neighbour_index+NORTH_STENCIL];
-      const int eii = neighbours_ii[neighbour_index+EAST_STENCIL];
-      const int sii = neighbours_ii[neighbour_index+SOUTH_STENCIL];
-      const int wii = neighbours_ii[neighbour_index+WEST_STENCIL];
-      const int njj = neighbours_jj[neighbour_index+NORTH_STENCIL];
-      const int ejj = neighbours_jj[neighbour_index+EAST_STENCIL];
-      const int sjj = neighbours_jj[neighbour_index+SOUTH_STENCIL];
-      const int wjj = neighbours_jj[neighbour_index+WEST_STENCIL];
-
       Ap[(ii)*nx+(jj)] = 
         (s_y[(ii)*nx+(jj)]+s_x[(ii)*(nx+1)+(jj)]+1.0+
-         s_x[(eii)*(nx+1)+(ejj)]+s_y[(nii)*nx+(njj)])*p[(ii)*nx+(jj)]
-        - s_y[(ii)*nx+(jj)]*p[(sii)*nx+(sjj)]
-        - s_x[(ii)*(nx+1)+(jj)]*p[(wii)*nx+(wjj)] 
-        - s_x[(eii)*(nx+1)+(ejj)]*p[(eii)*nx+(ejj)]
-        - s_y[(nii)*nx+(njj)]*p[(nii)*nx+(njj)];
+         s_x[(ii)*(nx+1)+(jj+1)]+s_y[(ii+1)*nx+(jj)])*p[(ii)*nx+(jj)]
+        - s_y[(ii)*nx+(jj)]*p[(ii-1)*nx+(jj)]
+        - s_x[(ii)*(nx+1)+(jj)]*p[(ii)*nx+(jj-1)] 
+        - s_x[(ii)*(nx+1)+(jj+1)]*p[(ii)*nx+(jj+1)]
+        - s_y[(ii+1)*nx+(jj)]*p[(ii+1)*nx+(jj)];
       pAp += p[(ii)*nx+(jj)]*Ap[(ii)*nx+(jj)];
     }
   }
