@@ -112,21 +112,25 @@ double initialise_cg(
 
 void calculate_unstructured_correction(
     const int nx, const int ny, const int nedges, const double heat_capacity,
-    const double conductivity, const double* volume, const double* rho, 
-    const double* temperature,
+    const double conductivity, const double dt, const double* volume, 
+    const double* rho, const double* temperature, double* b, 
     const int* edge_vertex0, const int* edge_vertex1,
     const int* cell_centroids_x, const int* cell_centroids_y,
     const int* vertices_x, const int* vertices_y,
     const int* cells_edges, const int* neighbours)
 {
-  // Find the gradient for all cells
+  /*
+     Note here that the temperature is the guessed temperature.
+   */
+
+  // Find the RHS that includes the unstructured mesh correction
   for(int ii = PAD; ii < ny-PAD; ++ii) {
     for(int jj = PAD; jj < nx-PAD; ++jj) {
-      const int cell_index = (ii)*nx+(jj);
-      double k = 0.0;
 
-      // Fetch the volume of the cell
+      // Fetch the cell centered values
+      const int cell_index = (ii)*nx+(jj);
       double V = volume[cell_index];
+      const double density = rho[(cell_index)];
 
       /*
        *    Performing least squares approximation to get unknown d
@@ -139,6 +143,7 @@ void calculate_unstructured_correction(
       // Calculate the coefficents to matrix M
       double MTM[3] = { 0.0 }; // Describes the three unique quantities in (M^T.M)
       double MT_del_phi[2] = { 0.0 };
+      double coeff[2] = { 0.0 };
 
       // Calculate the coefficients for all edges
       for(int ff = 0; ff < nedges; ++ff) {
@@ -161,17 +166,6 @@ void calculate_unstructured_correction(
         MTM[2] += cell_dy*cell_dy;
         MT_del_phi[0] += cell_dx*(phi_ff-phi0);
         MT_del_phi[1] += cell_dy*(phi_ff-phi0);
-      }
-
-      const double MTM_det = (1.0/(MTM[0]*MTM[2]-MTM[1]*MTM[1]));
-      temp_grad_cell_x[(cell_index)] = 
-        MTM_det*(MT_del_phi[0]*MTM[2]-MT_del_phi[1]*MTM[1]);
-      temp_grad_cell_y[(cell_index)] = 
-        MTM_det*(MT_del_phi[1]*MTM[0]-MT_del_phi[0]*MTM[1]);
-
-#if 0
-        const double density0 = rho[(cell_index)];
-        const double density1 = rho[(neighbour_index)];
 
         // Calculate the edge differentials
         const int edge_index = cells_edges[(ff)*nx*ny+(cell_index)];
@@ -182,26 +176,33 @@ void calculate_unstructured_correction(
 
         // Calculate the centroid distance and length of edge
         const double centroid_distance = sqrt(cell_dx*cell_dx+cell_dy*cell_dy);
-        const double edge_length = sqrt(edge_dx*edge_dx+edge_dy*edge_dy);
 
         // Calculate the unit vector joining cell centroids
         const double es_x = cell_dx/centroid_distance;
         const double es_y = cell_dy/centroid_distance;
 
-        // Calculate the unit vector joining the vertices
-        const double et_x = edge_dx/edge_length;
-        const double et_y = edge_dy/edge_length;
-
         // Calculate the area vector
         const double A_x = edge_dy;
         const double A_y = -edge_dx;
 
-#endif // if 0
+        const double density1 = rho[(neighbour_index)];
 
-        const double edge_density = (2.0*density0*density1)/(density0+density1);
+        const double edge_density = (2.0*density*density1)/(density+density1);
         const double diffusion_coeff = conductivity/(edge_density*heat_capacity);
 
+        coeff[0] = diffusion_coeff*(A_x-(A_x*A_x)/(A_x*es_x));
+        coeff[1] = diffusion_coeff*(A_y-(A_y*A_y)/(A_y*es_y));
       }
+
+      // Solve the equation for the temperature gradients
+      const double MTM_det = (1.0/(MTM[0]*MTM[2]-MTM[1]*MTM[1]));
+      const double temp_grad_cell_x = 
+        MTM_det*(MT_del_phi[0]*MTM[2]-MT_del_phi[1]*MTM[1]);
+      const double temp_grad_cell_y = 
+        MTM_det*(MT_del_phi[1]*MTM[0]-MT_del_phi[0]*MTM[1]);
+
+      const double tau = temp_grad_cell_x*coeff[0]+temp_grad_cell_y*coeff[1];
+      b[(cell_index)] = temperature[(cell_index)] - (dt*tau)/(V*density);
     }
   }
 }
