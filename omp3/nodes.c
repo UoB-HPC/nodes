@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <assert.h>
 #include "nodes.h"
 #include "../nodes_data.h"
 #include "../nodes_interface.h"
@@ -23,6 +24,7 @@ void solve_unstructured_diffusion_2d(
       unstructured_mesh->cell_centroids_x, unstructured_mesh->cell_centroids_y, 
       unstructured_mesh->vertices_x, unstructured_mesh->vertices_y, 
       unstructured_mesh->cells_edges, unstructured_mesh->edges_cells);
+
   double local_old_r2 = initialise_cg(
       nx, ny, dt, conductivity, heat_capacity, 
       p, r, temperature, unstructured_mesh->volume, b, 
@@ -30,6 +32,7 @@ void solve_unstructured_diffusion_2d(
       unstructured_mesh->edge_vertex1, unstructured_mesh->vertices_x, 
       unstructured_mesh->vertices_y, unstructured_mesh->cell_centroids_x, 
       unstructured_mesh->cell_centroids_y, unstructured_mesh->edges_cells);
+
   double global_old_r2 = reduce_all_sum(local_old_r2);
 
   handle_boundary_2d(nx, ny, mesh, p, NO_INVERT, PACK);
@@ -72,90 +75,6 @@ void solve_unstructured_diffusion_2d(
   *end_error = global_old_r2;
 }
 
-// Initialises the CG solver
-double initialise_cg(
-    const int nx, const int ny, const double dt, const double conductivity,
-    const double heat_capacity, double* p, double* r, const double* temperature, 
-    const double* volume, const double* b, const double* rho, const int* cells_edges, 
-    const int* edge_vertex0, const int* edge_vertex1, const double* vertices_x, 
-    const double* vertices_y, const double* cell_centroids_x, 
-    const double* cell_centroids_y, const int* edges_cells)
-{
-  START_PROFILING(&compute_profile);
-
-  // Going to initialise the coefficients here. This ensures that if the 
-  // density or mesh were changed by another package, that the coefficients
-  // are updated accordingly, making performance evaluation fairer.
-
-  double initial_r2 = 0.0;
-#pragma omp parallel for reduction(+: initial_r2)
-  for(int ii = PAD; ii < ny-PAD; ++ii) {
-#pragma omp simd
-    for(int jj = PAD; jj < nx-PAD; ++jj) {
-      const int cell_index = (ii)*nx+(jj);
-
-      const double density = rho[(cell_index)];
-      const double V = volume[(cell_index)];
-
-      double cell_coeff = 1;
-      double neighbour_contribution = 0;
-
-      for(int ff = 0; ff < NEDGES; ++ff) {
-        const int edge_index = cells_edges[(ff)*nx*ny+(cell_index)];
-        const int neighbour_index = 
-          (edges_cells[edge_index*NCELLS_PER_EDGE] == cell_index) ?
-          edges_cells[edge_index*NCELLS_PER_EDGE+1] :
-          edges_cells[edge_index*NCELLS_PER_EDGE];
-
-        // Calculate the distance between centroids
-        const double cell_centroid_x = cell_centroids_x[(cell_index)];
-        const double cell_centroid_y = cell_centroids_y[(cell_index)];
-        const double neighbour_centroid_x = cell_centroids_x[(neighbour_index)];
-        const double neighbour_centroid_y = cell_centroids_y[(neighbour_index)];
-
-        // Calculate the cell differentials
-        const double cell_dx = (neighbour_centroid_x-cell_centroid_x);
-        const double cell_dy = (neighbour_centroid_y-cell_centroid_y);
-
-        // Calculate the edge differentials
-        const int vertex0 = edge_vertex0[(edge_index)];
-        const int vertex1 = edge_vertex1[(edge_index)];
-        const double edge_dx = (vertices_x[vertex1]-vertices_x[vertex0]);
-        const double edge_dy = (vertices_y[vertex1]-vertices_y[vertex0]);
-
-        // Calculate the centroid distance and length of edge
-        const double centroid_distance = sqrt(cell_dx*cell_dx+cell_dy*cell_dy);
-
-        // Calculate the unit vector joining cell centroids
-        const double es_x = cell_dx/centroid_distance;
-        const double es_y = cell_dy/centroid_distance;
-
-        // Calculate the area vector
-        const double A_x = edge_dy;
-        const double A_y = -edge_dx;
-
-        // Calculate the diffusion coefficient
-        const double density1 = rho[(neighbour_index)];
-        const double edge_density = (2.0*density*density1)/(density+density1);
-        const double diffusion_coeff = conductivity/(edge_density*heat_capacity);
-
-        const double local_coeff = (dt*diffusion_coeff*(A_x*A_x+A_y*A_y))/
-          (centroid_distance*(A_x*es_x+A_y*es_y)*density*V);
-        neighbour_contribution = temperature[(neighbour_index)]*local_coeff;
-        cell_coeff -= local_coeff;
-      }
-
-      r[(ii)*nx+(jj)] = b[(ii)*nx+(jj)] - 
-        (neighbour_contribution + cell_coeff*temperature[(cell_index)]);
-      p[(ii)*nx+(jj)] = r[(ii)*nx+(jj)];
-      initial_r2 += r[(ii)*nx+(jj)]*r[(ii)*nx+(jj)];
-    }
-  }
-
-  STOP_PROFILING(&compute_profile, "initialise cg");
-  return initial_r2;
-}
-
 // Calculate the RHS including the unstructured correction term
 void calculate_rhs(
     const int nx, const int ny, const double heat_capacity, const double conductivity, 
@@ -174,7 +93,7 @@ void calculate_rhs(
 
       // Fetch the cell centered values
       const int cell_index = (ii)*nx+(jj);
-      double V = volume[cell_index];
+      double V = volume[(cell_index)];
       const double density = rho[(cell_index)];
 
       /*
@@ -191,30 +110,31 @@ void calculate_rhs(
       double coeff[2] = { 0.0 };
 
       // Calculate the coefficients for all edges
-      for(int ff = 0; ff < NEDGES; ++ff) {
-        const int edge_index = cells_edges[(ff)*nx*ny+(cell_index)];
+      for(int ee = 0; ee < NEDGES; ++ee) {
+        const int edge_index = cells_edges[(ee)*nx*ny+(cell_index)];
         const int neighbour_index = 
           (edges_cells[edge_index*NCELLS_PER_EDGE] == cell_index) ?
           edges_cells[edge_index*NCELLS_PER_EDGE+1] :
           edges_cells[edge_index*NCELLS_PER_EDGE];
 
-        // Calculate the distance between centroids
+        // Calculate the cell centroids
         const double cell_centroid_x = cell_centroids_x[(cell_index)];
         const double cell_centroid_y = cell_centroids_y[(cell_index)];
         const double neighbour_centroid_x = cell_centroids_x[(neighbour_index)];
         const double neighbour_centroid_y = cell_centroids_y[(neighbour_index)];
 
-        // Calculate the cell differentials
-        const double cell_dx = (neighbour_centroid_x-cell_centroid_x);
-        const double cell_dy = (neighbour_centroid_y-cell_centroid_y);
+        // Calculate the vector pointing between the cell centroids
+        const double es_x = (neighbour_centroid_x-cell_centroid_x);
+        const double es_y = (neighbour_centroid_y-cell_centroid_y);
 
+        // Calculate the gradient matrix
         const double phi0 = temperature[(cell_index)];
         const double phi_ff = temperature[(neighbour_index)];
-        MTM[0] += cell_dx*cell_dx;
-        MTM[1] += cell_dx*cell_dy;
-        MTM[2] += cell_dy*cell_dy;
-        MT_del_phi[0] += cell_dx*(phi_ff-phi0);
-        MT_del_phi[1] += cell_dy*(phi_ff-phi0);
+        MTM[0] += es_x*es_x;
+        MTM[1] += es_x*es_y;
+        MTM[2] += es_y*es_y;
+        MT_del_phi[0] += es_x*(phi_ff-phi0);
+        MT_del_phi[1] += es_y*(phi_ff-phi0);
 
         // Calculate the edge differentials
         const int vertex0 = edge_vertex0[(edge_index)];
@@ -222,24 +142,17 @@ void calculate_rhs(
         const double edge_dx = (vertices_x[vertex1]-vertices_x[vertex0]);
         const double edge_dy = (vertices_y[vertex1]-vertices_y[vertex0]);
 
-        // Calculate the centroid distance and length of edge
-        const double centroid_distance = sqrt(cell_dx*cell_dx+cell_dy*cell_dy);
-
-        // Calculate the unit vector joining cell centroids
-        const double es_x = cell_dx/centroid_distance;
-        const double es_y = cell_dy/centroid_distance;
-
         // Calculate the area vector
         const double A_x = edge_dy;
         const double A_y = -edge_dx;
 
+        // Calculate the coefficients of transformed shape
         const double density1 = rho[(neighbour_index)];
-
         const double edge_density = (2.0*density*density1)/(density+density1);
         const double diffusion_coeff = conductivity/(edge_density*heat_capacity);
-
-        coeff[0] = diffusion_coeff*(A_x-(A_x*A_x)/(A_x*es_x));
-        coeff[1] = diffusion_coeff*(A_y-(A_y*A_y)/(A_y*es_y));
+        const double gam = (A_x*A_x+A_y*A_y)/(A_x*es_x+A_y*es_y);
+        coeff[0] += diffusion_coeff*(A_x-es_x*gam);
+        coeff[1] += diffusion_coeff*(A_y-es_y*gam);
       }
 
       // Solve the equation for the temperature gradients
@@ -250,9 +163,89 @@ void calculate_rhs(
         MTM_det*(MT_del_phi[1]*MTM[0]-MT_del_phi[0]*MTM[1]);
 
       const double tau = temp_grad_cell_x*coeff[0]+temp_grad_cell_y*coeff[1];
-      b[(cell_index)] = temperature[(cell_index)] - (dt*tau)/(V*density);
+      b[(cell_index)] = (V*density/dt)*temperature[(cell_index)] + tau;
     }
   }
+}
+
+
+// Initialises the CG solver
+double initialise_cg(
+    const int nx, const int ny, const double dt, const double conductivity,
+    const double heat_capacity, double* p, double* r, const double* temperature, 
+    const double* volume, const double* b, const double* rho, const int* cells_edges, 
+    const int* edge_vertex0, const int* edge_vertex1, const double* vertices_x, 
+    const double* vertices_y, const double* cell_centroids_x, 
+    const double* cell_centroids_y, const int* edges_cells)
+{
+  START_PROFILING(&compute_profile);
+
+  // Going to initialise the coefficients here. This ensures that if the 
+  // density or mesh were changed by another package, that the coefficients
+  // are updated accordingly, making performance evaluation fairer.
+
+  double initial_r2 = 0.0;
+  for(int ii = PAD; ii < ny-PAD; ++ii) {
+    for(int jj = PAD; jj < nx-PAD; ++jj) {
+      const int cell_index = (ii)*nx+(jj);
+
+      const double density = rho[(cell_index)];
+      const double V = volume[(cell_index)];
+
+      double cell_coeff = 0.0;
+      double neighbour_contribution = 0.0;
+
+      for(int ee = 0; ee < NEDGES; ++ee) {
+        const int edge_index = cells_edges[(ee)*nx*ny+(cell_index)];
+        const int neighbour_index = 
+          (edges_cells[edge_index*NCELLS_PER_EDGE] == cell_index) ?
+          edges_cells[edge_index*NCELLS_PER_EDGE+1] :
+          edges_cells[edge_index*NCELLS_PER_EDGE];
+
+        // Calculate the cell centroids
+        const double cell_centroid_x = cell_centroids_x[(cell_index)];
+        const double cell_centroid_y = cell_centroids_y[(cell_index)];
+        const double neighbour_centroid_x = cell_centroids_x[(neighbour_index)];
+        const double neighbour_centroid_y = cell_centroids_y[(neighbour_index)];
+
+        // Calculate the vector pointing between the cell centroids
+        const double es_x = (neighbour_centroid_x-cell_centroid_x);
+        const double es_y = (neighbour_centroid_y-cell_centroid_y);
+
+        // Calculate the edge differentials
+        const int vertex0 = edge_vertex0[(edge_index)];
+        const int vertex1 = edge_vertex1[(edge_index)];
+        const double edge_dx = (vertices_x[vertex1]-vertices_x[vertex0]);
+        const double edge_dy = (vertices_y[vertex1]-vertices_y[vertex0]);
+
+        // Calculate the distance between the centroids
+        const double centroid_distance = sqrt(es_x*es_x+es_y*es_y);
+
+        // Calculate the area vector
+        const double A_x = edge_dy;
+        const double A_y = -edge_dx;
+
+        // Calculate the diffusion coefficient
+        const double density1 = rho[(neighbour_index)];
+        const double edge_density = (2.0*density*density1)/(density+density1);
+        const double diffusion_coeff = conductivity/(edge_density*heat_capacity);
+
+        const double local_coeff = 
+          (diffusion_coeff*(A_x*A_x+A_y*A_y))/
+          (centroid_distance*fabs(A_x*es_x+A_y*es_y));
+        neighbour_contribution += temperature[(neighbour_index)]*local_coeff;
+        cell_coeff += local_coeff;
+      }
+
+      r[(cell_index)] = b[(cell_index)] - 
+        (cell_coeff+(density*V/dt))*temperature[(cell_index)] - neighbour_contribution;
+      p[(cell_index)] = r[(cell_index)];
+      initial_r2 += r[(cell_index)]*r[(cell_index)];
+    }
+  }
+
+  STOP_PROFILING(&compute_profile, "initialise cg");
+  return initial_r2;
 }
 
 // Calculates a value for alpha
@@ -268,34 +261,32 @@ double calculate_pAp(
   START_PROFILING(&compute_profile);
 
   double pAp = 0.0;
-#pragma omp parallel for reduction(+: pAp)
   for(int ii = PAD; ii < ny-PAD; ++ii) {
-#pragma omp simd
     for(int jj = PAD; jj < nx-PAD; ++jj) {
       const int cell_index = (ii)*nx+(jj);
 
       const double density = rho[(cell_index)];
       const double V = volume[(cell_index)];
 
-      double cell_coeff = 1;
-      double neighbour_contribution = 0;
+      double cell_coeff = 0.0;
+      double neighbour_contribution = 0.0;
 
-      for(int ff = 0; ff < NEDGES; ++ff) {
-        const int edge_index = cells_edges[(ff)*nx*ny+(cell_index)];
+      for(int ee = 0; ee < NEDGES; ++ee) {
+        const int edge_index = cells_edges[(ee)*nx*ny+(cell_index)];
         const int neighbour_index = 
           (edges_cells[edge_index*NCELLS_PER_EDGE] == cell_index) ?
           edges_cells[edge_index*NCELLS_PER_EDGE+1] :
           edges_cells[edge_index*NCELLS_PER_EDGE];
 
-        // Calculate the distance between centroids
+        // Calculate the cell centroids
         const double cell_centroid_x = cell_centroids_x[(cell_index)];
         const double cell_centroid_y = cell_centroids_y[(cell_index)];
         const double neighbour_centroid_x = cell_centroids_x[(neighbour_index)];
         const double neighbour_centroid_y = cell_centroids_y[(neighbour_index)];
 
-        // Calculate the cell differentials
-        const double cell_dx = (neighbour_centroid_x-cell_centroid_x);
-        const double cell_dy = (neighbour_centroid_y-cell_centroid_y);
+        // Calculate the vector pointing between the cell centroids
+        const double es_x = (neighbour_centroid_x-cell_centroid_x);
+        const double es_y = (neighbour_centroid_y-cell_centroid_y);
 
         // Calculate the edge differentials
         const int vertex0 = edge_vertex0[(edge_index)];
@@ -303,12 +294,8 @@ double calculate_pAp(
         const double edge_dx = (vertices_x[vertex1]-vertices_x[vertex0]);
         const double edge_dy = (vertices_y[vertex1]-vertices_y[vertex0]);
 
-        // Calculate the centroid distance and length of edge
-        const double centroid_distance = sqrt(cell_dx*cell_dx+cell_dy*cell_dy);
-
-        // Calculate the unit vector joining cell centroids
-        const double es_x = cell_dx/centroid_distance;
-        const double es_y = cell_dy/centroid_distance;
+        // Calculate the distance between the centroids
+        const double centroid_distance = sqrt(es_x*es_x+es_y*es_y);
 
         // Calculate the area vector
         const double A_x = edge_dy;
@@ -319,15 +306,16 @@ double calculate_pAp(
         const double edge_density = (2.0*density*density1)/(density+density1);
         const double diffusion_coeff = conductivity/(edge_density*heat_capacity);
 
-        const double local_coeff = (dt*diffusion_coeff*(A_x*A_x+A_y*A_y))/
-          (centroid_distance*(A_x*es_x+A_y*es_y)*density*V);
-        neighbour_contribution = temperature[(neighbour_index)]*local_coeff;
-        cell_coeff -= local_coeff;
+        const double local_coeff = 
+          (diffusion_coeff*(A_x*A_x+A_y*A_y))/
+          (centroid_distance*fabs(A_x*es_x+A_y*es_y));
+        neighbour_contribution += p[(neighbour_index)]*local_coeff;
+        cell_coeff += local_coeff;
       }
 
-      Ap[(ii)*nx+(jj)] = 
-        (neighbour_contribution+cell_coeff*temperature[(cell_index)]);
-      pAp += p[(ii)*nx+(jj)]*Ap[(ii)*nx+(jj)];
+      Ap[(cell_index)] = 
+        (cell_coeff+(density*V/dt))*p[(cell_index)]-neighbour_contribution;
+      pAp += p[(cell_index)]*Ap[(cell_index)];
     }
   }
 
@@ -343,9 +331,7 @@ double calculate_new_r2(
 
   double new_r2 = 0.0;
 
-#pragma omp parallel for reduction(+: new_r2)
   for(int ii = PAD; ii < ny-PAD; ++ii) {
-#pragma omp simd
     for(int jj = PAD; jj < nx-PAD; ++jj) {
       temperature[(ii)*nx+(jj)] += alpha*p[(ii)*nx+(jj)];
       r[(ii)*nx+(jj)] -= alpha*Ap[(ii)*nx+(jj)];
@@ -362,9 +348,7 @@ void update_conjugate(
     const int nx, const int ny, const double beta, const double* r, double* p)
 {
   START_PROFILING(&compute_profile);
-#pragma omp parallel for
   for(int ii = PAD; ii < ny-PAD; ++ii) {
-#pragma omp simd
     for(int jj = PAD; jj < nx-PAD; ++jj) {
       p[(ii)*nx+(jj)] = r[(ii)*nx+(jj)] + beta*p[(ii)*nx+(jj)];
     }

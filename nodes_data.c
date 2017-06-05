@@ -104,6 +104,19 @@ void initialise_unstructured_quad_mesh_2d(
   allocate_data(&unstructured_mesh->cell_centroids_y, nx*ny);
   allocate_data(&unstructured_mesh->volume, nx*ny);
 
+  // Initialise cells connecting edges
+  for(int ii = 0; ii < ny; ++ii) {
+    for(int jj = 0; jj < nx; ++jj) {
+      unstructured_mesh->cells_edges[(BOTTOM)*nx*ny+(ii)*nx+(jj)] = (ii)*(2*nx+1)+(jj);
+      unstructured_mesh->cells_edges[(LEFT)*nx*ny+(ii)*nx+(jj)] = 
+        unstructured_mesh->cells_edges[(BOTTOM)*nx*ny+(ii)*nx+(jj)]+nx;
+      unstructured_mesh->cells_edges[(RIGHT)*nx*ny+(ii)*nx+(jj)] =
+        unstructured_mesh->cells_edges[(LEFT)*nx*ny+(ii)*nx+(jj)]+1;
+      unstructured_mesh->cells_edges[(TOP)*nx*ny+(ii)*nx+(jj)] =
+        unstructured_mesh->cells_edges[(RIGHT)*nx*ny+(ii)*nx+(jj)]+nx;
+    }
+  }
+
   // Find the (x,y) location of each of the cell centroids, and the cell volume
   for(int ii = 0; ii < ny; ++ii) {
     for(int jj = 0; jj < nx; ++jj) {
@@ -136,27 +149,13 @@ void initialise_unstructured_quad_mesh_2d(
         A += 0.5*(x0*y1-x1*y0);
         c_x_factor += (x0+x1)*(x0*y1-x1*y0);
         c_y_factor += (y0+y1)*(x0*y1-x1*y0);
-
-        // NOTE: This calculation of the volume is actually general to all
-        // simple polygons...
-        unstructured_mesh->volume[(ii)*nx+(jj)] += A;
       }
 
+      // NOTE: This calculation of the volume is actually general to all
+      // simple polygons...
+      unstructured_mesh->volume[(ii)*nx+(jj)] = A;
       unstructured_mesh->cell_centroids_x[cell_index] = (1.0/(6.0*A))*c_x_factor;
       unstructured_mesh->cell_centroids_y[cell_index] = (1.0/(6.0*A))*c_y_factor;
-    }
-  }
-
-  // Initialise cells connecting edges
-  for(int ii = 0; ii < ny; ++ii) {
-    for(int jj = 0; jj < nx; ++jj) {
-      unstructured_mesh->cells_edges[(BOTTOM)*nx*ny+(ii)*nx+(jj)] = (ii)*(2*nx+1)+(jj);
-      unstructured_mesh->cells_edges[(LEFT)*nx*ny+(ii)*nx+(jj)] = 
-        unstructured_mesh->cells_edges[(BOTTOM)*nx*ny+(ii)*nx+(jj)]+nx;
-      unstructured_mesh->cells_edges[(RIGHT)*nx*ny+(ii)*nx+(jj)] =
-        unstructured_mesh->cells_edges[(LEFT)*nx*ny+(ii)*nx+(jj)]+1;
-      unstructured_mesh->cells_edges[(TOP)*nx*ny+(ii)*nx+(jj)] =
-        unstructured_mesh->cells_edges[(RIGHT)*nx*ny+(ii)*nx+(jj)]+nx;
     }
   }
 }
