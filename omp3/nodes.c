@@ -10,16 +10,26 @@
 
 // Solve the unstructured diffusion problem
 void solve_unstructured_diffusion_2d(
-    const int nx, const int ny, Mesh* mesh, const int max_inners, const double dt, 
-    const double heat_capacity, const double conductivity,
-    double* temperature, double* r, double* p, double* rho, double* s_x, double* s_y, 
-    double* Ap, int* end_niters, double* end_error, double* reduce_array,
-    const double* edgedx, const double* edgedy)
+    const int nx, const int ny, Mesh* mesh, UnstructuredMesh* unstructured_mesh, 
+    const int max_inners, const double dt, const double heat_capacity, 
+    const double conductivity, double* temperature, double* b, double* r, double* p, 
+    double* rho, double* Ap, int* end_niters, double* end_error, double* reduce_array)
 {
   // Store initial residual
+  calculate_rhs( 
+      nx, ny, heat_capacity, conductivity, dt, 
+      unstructured_mesh->volume, rho, temperature, b, 
+      unstructured_mesh->edge_vertex0, unstructured_mesh->edge_vertex1, 
+      unstructured_mesh->cell_centroids_x, unstructured_mesh->cell_centroids_y, 
+      unstructured_mesh->vertices_x, unstructured_mesh->vertices_y, 
+      unstructured_mesh->cells_edges, unstructured_mesh->edges_cells);
   double local_old_r2 = initialise_cg(
-      nx, ny, dt, heat_capacity, conductivity, p, r, temperature, rho, s_x, s_y, edgedx, 
-      edgedy);
+      nx, ny, dt, conductivity, heat_capacity, 
+      p, r, temperature, unstructured_mesh->volume, b, 
+      rho, unstructured_mesh->cells_edges, unstructured_mesh->edge_vertex0, 
+      unstructured_mesh->edge_vertex1, unstructured_mesh->vertices_x, 
+      unstructured_mesh->vertices_y, unstructured_mesh->cell_centroids_x, 
+      unstructured_mesh->cell_centroids_y, unstructured_mesh->edges_cells);
   double global_old_r2 = reduce_all_sum(local_old_r2);
 
   handle_boundary_2d(nx, ny, mesh, p, NO_INVERT, PACK);
@@ -29,7 +39,14 @@ void solve_unstructured_diffusion_2d(
   int ii = 0;
   for(ii = 0; ii < max_inners; ++ii) {
 
-    const double local_pAp = calculate_pAp(nx, ny, s_x, s_y, p, Ap);
+    const double local_pAp = calculate_pAp(
+        nx, ny, p, Ap, dt, conductivity, heat_capacity, temperature, 
+        unstructured_mesh->volume, rho, unstructured_mesh->cells_edges, 
+        unstructured_mesh->edge_vertex0, unstructured_mesh->edge_vertex1, 
+        unstructured_mesh->vertices_x, unstructured_mesh->vertices_y, 
+        unstructured_mesh->cell_centroids_x, unstructured_mesh->cell_centroids_y, 
+        unstructured_mesh->edges_cells);
+
     const double global_pAp = reduce_all_sum(local_pAp);
     const double alpha = global_old_r2/global_pAp;
 
@@ -58,20 +75,18 @@ void solve_unstructured_diffusion_2d(
 // Initialises the CG solver
 double initialise_cg(
     const int nx, const int ny, const double dt, const double conductivity,
-    const double heat_capacity, const int nedges, double* p, double* r, 
-    const double* temperature, const double* volume, const double* b,
-    const double* rho, double* s_x, double* s_y, const double* edgedx, 
-    const double* edgedy, const int* cells_edges, const int* edge_vertex0,
-    const int* edge_vertex1, const int* vertices_x, const int* vertices_y,
-    const int* cell_centroids_x, const int* cell_centroids_y, 
-    const int* neighbours)
+    const double heat_capacity, double* p, double* r, const double* temperature, 
+    const double* volume, const double* b, const double* rho, const int* cells_edges, 
+    const int* edge_vertex0, const int* edge_vertex1, const double* vertices_x, 
+    const double* vertices_y, const double* cell_centroids_x, 
+    const double* cell_centroids_y, const int* edges_cells)
 {
   START_PROFILING(&compute_profile);
 
   // Going to initialise the coefficients here. This ensures that if the 
   // density or mesh were changed by another package, that the coefficients
   // are updated accordingly, making performance evaluation fairer.
-  
+
   double initial_r2 = 0.0;
 #pragma omp parallel for reduction(+: initial_r2)
   for(int ii = PAD; ii < ny-PAD; ++ii) {
@@ -85,8 +100,12 @@ double initialise_cg(
       double cell_coeff = 1;
       double neighbour_contribution = 0;
 
-      for(int ff = 0; ff < nedges; ++ff) {
-        const int neighbour_index = neighbours[(ff)*nx*ny+(cell_index)];
+      for(int ff = 0; ff < NEDGES; ++ff) {
+        const int edge_index = cells_edges[(ff)*nx*ny+(cell_index)];
+        const int neighbour_index = 
+          (edges_cells[edge_index*NCELLS_PER_EDGE] == cell_index) ?
+          edges_cells[edge_index*NCELLS_PER_EDGE+1] :
+          edges_cells[edge_index*NCELLS_PER_EDGE];
 
         // Calculate the distance between centroids
         const double cell_centroid_x = cell_centroids_x[(cell_index)];
@@ -99,7 +118,6 @@ double initialise_cg(
         const double cell_dy = (neighbour_centroid_y-cell_centroid_y);
 
         // Calculate the edge differentials
-        const int edge_index = cells_edges[(ff)*nx*ny+(cell_index)];
         const int vertex0 = edge_vertex0[(edge_index)];
         const int vertex1 = edge_vertex1[(edge_index)];
         const double edge_dx = (vertices_x[vertex1]-vertices_x[vertex0]);
@@ -140,17 +158,15 @@ double initialise_cg(
 
 // Calculate the RHS including the unstructured correction term
 void calculate_rhs(
-    const int nx, const int ny, const int nedges, const double heat_capacity,
-    const double conductivity, const double dt, const double* volume, 
-    const double* rho, const double* temperature, double* b, 
-    const int* edge_vertex0, const int* edge_vertex1,
-    const int* cell_centroids_x, const int* cell_centroids_y,
-    const int* vertices_x, const int* vertices_y,
-    const int* cells_edges, const int* neighbours)
+    const int nx, const int ny, const double heat_capacity, const double conductivity, 
+    const double dt, const double* volume, const double* rho, const double* temperature, 
+    double* b, const int* edge_vertex0, const int* edge_vertex1, 
+    const double* cell_centroids_x, const double* cell_centroids_y, const double* vertices_x, 
+    const double* vertices_y, const int* cells_edges, const int* edges_cells)
 {
   /*
      Note here that the temperature is the guessed temperature.
-   */
+     */
 
   // Find the RHS that includes the unstructured mesh correction
   for(int ii = PAD; ii < ny-PAD; ++ii) {
@@ -175,8 +191,12 @@ void calculate_rhs(
       double coeff[2] = { 0.0 };
 
       // Calculate the coefficients for all edges
-      for(int ff = 0; ff < nedges; ++ff) {
-        const int neighbour_index = neighbours[(ff)*nx*ny+(cell_index)];
+      for(int ff = 0; ff < NEDGES; ++ff) {
+        const int edge_index = cells_edges[(ff)*nx*ny+(cell_index)];
+        const int neighbour_index = 
+          (edges_cells[edge_index*NCELLS_PER_EDGE] == cell_index) ?
+          edges_cells[edge_index*NCELLS_PER_EDGE+1] :
+          edges_cells[edge_index*NCELLS_PER_EDGE];
 
         // Calculate the distance between centroids
         const double cell_centroid_x = cell_centroids_x[(cell_index)];
@@ -197,7 +217,6 @@ void calculate_rhs(
         MT_del_phi[1] += cell_dy*(phi_ff-phi0);
 
         // Calculate the edge differentials
-        const int edge_index = cells_edges[(ff)*nx*ny+(cell_index)];
         const int vertex0 = edge_vertex0[(edge_index)];
         const int vertex1 = edge_vertex1[(edge_index)];
         const double edge_dx = (vertices_x[vertex1]-vertices_x[vertex0]);
@@ -239,13 +258,12 @@ void calculate_rhs(
 // Calculates a value for alpha
 double calculate_pAp(
     const int nx, const int ny, double* p, double* Ap, const double dt, 
-    const double conductivity, const double heat_capacity, const int nedges, 
-    double* r, const double* temperature, const double* volume,
-    const double* rho, double* s_x, double* s_y, const double* edgedx, 
-    const double* edgedy, const int* cells_edges, const int* edge_vertex0,
-    const int* edge_vertex1, const int* vertices_x, const int* vertices_y,
-    const int* cell_centroids_x, const int* cell_centroids_y, 
-    const int* neighbours)
+    const double conductivity, const double heat_capacity, 
+    const double* temperature, const double* volume, const double* rho, 
+    const int* cells_edges, const int* edge_vertex0, const int* edge_vertex1, 
+    const double* vertices_x, const double* vertices_y,
+    const double* cell_centroids_x, const double* cell_centroids_y, 
+    const int* edges_cells)
 {
   START_PROFILING(&compute_profile);
 
@@ -262,8 +280,12 @@ double calculate_pAp(
       double cell_coeff = 1;
       double neighbour_contribution = 0;
 
-      for(int ff = 0; ff < nedges; ++ff) {
-        const int neighbour_index = neighbours[(ff)*nx*ny+(cell_index)];
+      for(int ff = 0; ff < NEDGES; ++ff) {
+        const int edge_index = cells_edges[(ff)*nx*ny+(cell_index)];
+        const int neighbour_index = 
+          (edges_cells[edge_index*NCELLS_PER_EDGE] == cell_index) ?
+          edges_cells[edge_index*NCELLS_PER_EDGE+1] :
+          edges_cells[edge_index*NCELLS_PER_EDGE];
 
         // Calculate the distance between centroids
         const double cell_centroid_x = cell_centroids_x[(cell_index)];
@@ -276,7 +298,6 @@ double calculate_pAp(
         const double cell_dy = (neighbour_centroid_y-cell_centroid_y);
 
         // Calculate the edge differentials
-        const int edge_index = cells_edges[(ff)*nx*ny+(cell_index)];
         const int vertex0 = edge_vertex0[(edge_index)];
         const int vertex1 = edge_vertex1[(edge_index)];
         const double edge_dx = (vertices_x[vertex1]-vertices_x[vertex0]);
