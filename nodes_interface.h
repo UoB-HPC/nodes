@@ -1,18 +1,18 @@
 #pragma once
 
 #include "../mesh.h"
+#include "nodes_data.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// Performs the CG solve
+// Solve the unstructured diffusion problem
 void solve_unstructured_diffusion_2d(
-    const int nx, const int ny, Mesh* mesh, const int max_inners, const double dt, 
-    const double heat_capacity, const double conductivity,
-    double* x, double* r, double* p, double* rho, double* s_x, double* s_y, 
-    double* Ap, int* end_niters, double* end_error, double* reduce_array,
-    const double* edgedx, const double* edgedy);
+    const int nx, const int ny, Mesh* mesh, UnstructuredMesh* unstructured_mesh, 
+    const int max_inners, const double dt, const double heat_capacity, 
+    const double conductivity, double* temperature, double* b, double* r, double* p, 
+    double* rho, double* Ap, int* end_niters, double* end_error, double* reduce_array);
 
 #ifdef __cplusplus
 }

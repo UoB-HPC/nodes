@@ -18,19 +18,21 @@ void build_unstructured_quad_mesh(
 
 // Initialises the data specific to the nodes application
 void initialise_nodes_data(
-    NodesData* nodes_data, const char* nodes_params)
+    const int nx, const int ny, NodesData* nodes_data, const char* nodes_params)
 {
   nodes_data->conductivity = get_double_parameter("conductivity", nodes_params);
   nodes_data->heat_capacity = get_double_parameter("heat_capacity", nodes_params);
+  allocate_data(&nodes_data->b, nx*ny);
 }
 
 // Build an unstructured mesh
 void initialise_unstructured_quad_mesh_2d(
     UnstructuredMesh* unstructured_mesh, Mesh* mesh)
 {
+  /* Currently this unstructured mesh generation is specific to quads,
+   * going to try to work out what needs to happen to make fully unstructured */
+
   // Just setting all cells to have same number of edges
-  unstructured_mesh->nedges = NEDGES;
-  const int nedges = unstructured_mesh->nedges;
   const int nx = mesh->local_nx;
   const int ny = mesh->local_nx;
   const int global_nx = mesh->global_nx;
@@ -52,6 +54,7 @@ void initialise_unstructured_quad_mesh_2d(
   // Ordered by edge_vertex_0 is closest to bottom left
   allocate_int_data(&unstructured_mesh->edge_vertex0, unstructured_mesh->nedges);
   allocate_int_data(&unstructured_mesh->edge_vertex1, unstructured_mesh->nedges);
+  allocate_int_data(&unstructured_mesh->edges_cells, unstructured_mesh->nedges*NCELLS_PER_EDGE);
 
   // Construct the list of vertices contiguously, currently Cartesian
   for(int ii = 0; ii < (ny+1); ++ii) {
@@ -62,8 +65,7 @@ void initialise_unstructured_quad_mesh_2d(
     }
   }
 
-  // Calculate the vertices connecting each edge, we step through from bottom 
-  // left all the way to top right
+  // Calculate the vertices connecting each edge
   for(int ii = 0; ii < ny+1; ++ii) {
     for(int jj = 0; jj < nx; ++jj) {
       const int edge_index = (ii)*(2*nx+1)+(jj);
@@ -79,27 +81,30 @@ void initialise_unstructured_quad_mesh_2d(
     }
   }
 
-  // TODO: Make sure that the memory order of the cells_edges array is
-  // optimal for all architectures
-  allocate_int_data(&unstructured_mesh->cells_edges, nedges*nx*ny);
-
-  // Initialise cells connecting edges
-  for(int ii = 0; ii < ny; ++ii) {
+  // Calculate the cells connected to edges, as a neighbour list.
+  for(int ii = 0; ii < ny+1; ++ii) {
     for(int jj = 0; jj < nx; ++jj) {
-      unstructured_mesh->cells_edges[(BOTTOM)*nx*ny+(ii)*nx+(jj)] = (ii)*(2*nx+1)+(jj);
-      unstructured_mesh->cells_edges[(LEFT)*nx*ny+(ii)*nx+(jj)] = 
-        unstructured_mesh->cells_edges[(BOTTOM)*nx*ny+(ii)*nx+(jj)]+nx;
-      unstructured_mesh->cells_edges[(RIGHT)*nx*ny+(ii)*nx+(jj)] =
-        unstructured_mesh->cells_edges[(LEFT)*nx*ny+(ii)*nx+(jj)]+1;
-      unstructured_mesh->cells_edges[(TOP)*nx*ny+(ii)*nx+(jj)] =
-        unstructured_mesh->cells_edges[(RIGHT)*nx*ny+(ii)*nx+(jj)]+nx;
+      const int edge_index = (ii)*(2*nx+1)+(jj);
+      unstructured_mesh->edges_cells[(edge_index)*NCELLS_PER_EDGE+0] = (ii)*nx+(jj);
+      unstructured_mesh->edges_cells[(edge_index)*NCELLS_PER_EDGE+1] = (ii-1)*nx+(jj);
+    }
+    if(ii < ny) {
+      for(int jj = 0; jj < nx+1; ++jj) {
+        const int edge_index = (ii)*(2*nx+1)+(jj)+nx;
+        unstructured_mesh->edges_cells[(edge_index)*NCELLS_PER_EDGE+0] = (ii)*nx+(jj);
+        unstructured_mesh->edges_cells[(edge_index)*NCELLS_PER_EDGE+1] = (ii)*nx+(jj-1);
+      }
     }
   }
 
+  // TODO: Make sure that the memory order of the cells_edges array is
+  // optimal for all architectures
+  allocate_int_data(&unstructured_mesh->cells_edges, NEDGES*nx*ny);
   allocate_data(&unstructured_mesh->cell_centroids_x, nx*ny);
   allocate_data(&unstructured_mesh->cell_centroids_y, nx*ny);
+  allocate_data(&unstructured_mesh->volume, nx*ny);
 
-  // Find the (x,y) location of each of the cell centroids
+  // Find the (x,y) location of each of the cell centroids, and the cell volume
   for(int ii = 0; ii < ny; ++ii) {
     for(int jj = 0; jj < nx; ++jj) {
       const int cell_index = (ii)*nx+(jj);
@@ -108,7 +113,7 @@ void initialise_unstructured_quad_mesh_2d(
       double c_x_factor = 0.0;
       double c_y_factor = 0.0;
 
-      for(int kk = 0; kk < nedges; ++kk) {
+      for(int kk = 0; kk < NEDGES; ++kk) {
         int edge_index = unstructured_mesh->cells_edges[(kk)*nx*ny+(cell_index)];
         int edge_vertex0 = unstructured_mesh->edge_vertex0[edge_index];
         int edge_vertex1 = unstructured_mesh->edge_vertex1[edge_index];
@@ -131,10 +136,27 @@ void initialise_unstructured_quad_mesh_2d(
         A += 0.5*(x0*y1-x1*y0);
         c_x_factor += (x0+x1)*(x0*y1-x1*y0);
         c_y_factor += (y0+y1)*(x0*y1-x1*y0);
+
+        // NOTE: This calculation of the volume is actually general to all
+        // simple polygons...
+        unstructured_mesh->volume[(ii)*nx+(jj)] += A;
       }
 
       unstructured_mesh->cell_centroids_x[cell_index] = (1.0/(6.0*A))*c_x_factor;
       unstructured_mesh->cell_centroids_y[cell_index] = (1.0/(6.0*A))*c_y_factor;
+    }
+  }
+
+  // Initialise cells connecting edges
+  for(int ii = 0; ii < ny; ++ii) {
+    for(int jj = 0; jj < nx; ++jj) {
+      unstructured_mesh->cells_edges[(BOTTOM)*nx*ny+(ii)*nx+(jj)] = (ii)*(2*nx+1)+(jj);
+      unstructured_mesh->cells_edges[(LEFT)*nx*ny+(ii)*nx+(jj)] = 
+        unstructured_mesh->cells_edges[(BOTTOM)*nx*ny+(ii)*nx+(jj)]+nx;
+      unstructured_mesh->cells_edges[(RIGHT)*nx*ny+(ii)*nx+(jj)] =
+        unstructured_mesh->cells_edges[(LEFT)*nx*ny+(ii)*nx+(jj)]+1;
+      unstructured_mesh->cells_edges[(TOP)*nx*ny+(ii)*nx+(jj)] =
+        unstructured_mesh->cells_edges[(RIGHT)*nx*ny+(ii)*nx+(jj)]+nx;
     }
   }
 }

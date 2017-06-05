@@ -43,7 +43,7 @@ int main(int argc, char** argv)
 
   NodesData nodes_data = {0};
   initialise_nodes_data(
-      &nodes_data, nodes_params);
+      mesh.local_nx, mesh.local_ny, &nodes_data, nodes_params);
 
   SharedData shared_data = {0};
   initialise_shared_data_2d(
@@ -79,11 +79,10 @@ int main(int argc, char** argv)
     int end_niters = 0;
     double end_error = 0.0;
     solve_unstructured_diffusion_2d(
-        mesh.local_nx, mesh.local_ny, &mesh, max_inners, mesh.dt, 
-        nodes_data.heat_capacity, nodes_data.conductivity,  shared_data.x, 
-        shared_data.r, shared_data.p, shared_data.rho, shared_data.s_x, 
-        shared_data.s_y, shared_data.Ap, &end_niters, &end_error, 
-        shared_data.reduce_array0, mesh.edgedx, mesh.edgedy);
+        mesh.local_nx, mesh.local_ny, &mesh, &unstructured_mesh, max_inners, mesh.dt, 
+        nodes_data.heat_capacity, nodes_data.conductivity, shared_data.x, 
+        nodes_data.b, shared_data.r, shared_data.p, shared_data.rho, shared_data.Ap, 
+        &end_niters, &end_error, shared_data.reduce_array0);
 
     wallclock += omp_get_wtime()-w0;
 
