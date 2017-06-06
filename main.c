@@ -39,7 +39,7 @@ int main(int argc, char** argv)
   initialise_mesh_2d(&mesh);
 
   UnstructuredMesh unstructured_mesh;
-  initialise_unstructured_quad_mesh_2d(&unstructured_mesh, &mesh);
+  initialise_curvilinear_quad_mesh_2d(&unstructured_mesh, &mesh);
 
   NodesData nodes_data = {0};
   initialise_nodes_data(
@@ -116,7 +116,7 @@ int main(int argc, char** argv)
 
 
 
-  write_curvilinear_data_to_visit(
+  write_quad_data_to_visit(
       mesh.local_nx, mesh.local_ny, 0, unstructured_mesh.vertices_x, 
       unstructured_mesh.vertices_y, shared_data.x);
 

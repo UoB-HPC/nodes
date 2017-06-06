@@ -25,6 +25,10 @@ void solve_unstructured_diffusion_2d(
       unstructured_mesh->vertices_x, unstructured_mesh->vertices_y, 
       unstructured_mesh->cells_edges, unstructured_mesh->edges_cells);
 
+  write_quad_data_to_visit(
+      mesh->local_nx, mesh->local_ny, 1, unstructured_mesh->vertices_x, 
+      unstructured_mesh->vertices_y, b);
+
   double local_old_r2 = initialise_cg(
       nx, ny, dt, conductivity, heat_capacity, 
       p, r, temperature, unstructured_mesh->volume, b, 
@@ -127,6 +131,21 @@ void calculate_rhs(
         const double es_x = (neighbour_centroid_x-cell_centroid_x);
         const double es_y = (neighbour_centroid_y-cell_centroid_y);
 
+        // Calculate the edge differentials
+        const int vertex0 = edge_vertex0[(edge_index)];
+        const int vertex1 = edge_vertex1[(edge_index)];
+
+        // Calculate the area vector
+        double A_x = (vertices_y[vertex1]-vertices_y[vertex0]);
+        double A_y = -(vertices_x[vertex1]-vertices_x[vertex0]);
+
+        if(samesign(es_x , A_y)) {
+          A_x = -A_x;
+        }
+        else if(!samesign(es_y , A_x)) {
+          A_y = -A_y;
+        }
+
         // Calculate the gradient matrix
         const double phi0 = temperature[(cell_index)];
         const double phi_ff = temperature[(neighbour_index)];
@@ -135,14 +154,6 @@ void calculate_rhs(
         MTM[2] += es_y*es_y;
         MT_del_phi[0] += es_x*(phi_ff-phi0);
         MT_del_phi[1] += es_y*(phi_ff-phi0);
-
-        // Calculate the edge differentials
-        const int vertex0 = edge_vertex0[(edge_index)];
-        const int vertex1 = edge_vertex1[(edge_index)];
-
-        // Calculate the area vector
-        const double A_x = (vertices_y[vertex1]-vertices_y[vertex0]);
-        const double A_y = -(vertices_x[vertex1]-vertices_x[vertex0]);
 
         // Calculate the coefficients of transformed shape
         const double density1 = rho[(neighbour_index)];
@@ -234,7 +245,8 @@ double initialise_cg(
       }
 
       r[(cell_index)] = b[(cell_index)] - 
-        (neighbour_coeff_total+(density*V/dt))*temperature[(cell_index)] - neighbour_contribution;
+        (neighbour_coeff_total+(density*V/dt))*temperature[(cell_index)] - 
+        neighbour_contribution;
       p[(cell_index)] = r[(cell_index)];
       initial_r2 += r[(cell_index)]*r[(cell_index)];
     }

@@ -45,12 +45,16 @@ typedef struct {
 void initialise_nodes_data(
     const int nx, const int ny, NodesData* nodes_data, const char* nodes_params);
 
-// Build an unstructured mesh
-void initialise_unstructured_quad_mesh_2d(
+// Build a 2d rectilinear mesh of quads
+void initialise_rectilinear_quad_mesh_2d(
+    UnstructuredMesh* unstructured_mesh, Mesh* mesh);
+
+// Build a 2d curvilinear mesh of quads
+void initialise_curvilinear_quad_mesh_2d(
     UnstructuredMesh* unstructured_mesh, Mesh* mesh);
 
 // Considering the writing of curvilinear data into a silo file
-void write_curvilinear_data_to_visit(
+void write_quad_data_to_visit(
       const int nx, const int ny, const int step, double* vertices_x, 
       double* vertices_y, const double* data);
 
