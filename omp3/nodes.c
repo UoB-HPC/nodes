@@ -226,8 +226,6 @@ double initialise_cg(
         const double edge_density = (2.0*density*density1)/(density+density1);
         const double diffusion_coeff = conductivity/(edge_density*heat_capacity);
 
-        printf("%.12e %.12e\n", A_x, es_x);
-
         const double neighbour_coeff = 
           (diffusion_coeff*(A_x*A_x+A_y*A_y))/
           (centroid_distance*fabs(A_x*es_x+A_y*es_y));
