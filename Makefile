@@ -88,5 +88,6 @@ make_build_dir:
 	@mkdir -p $(ARCH_BUILD_DIR)/$(KERNELS)
 
 clean:
-	rm -rf $(ARCH_BUILD_DIR)/* nodes.$(KERNELS) *.vtk *.bov *.dat *.optrpt *.cub *.ptx
+	rm -rf $(ARCH_BUILD_DIR)/* nodes.$(KERNELS) *.vtk *.bov *.dat \
+		*.optrpt *.cub *.ptx *.silo
 

@@ -113,6 +113,16 @@ int main(int argc, char** argv)
         shared_data.x, "final_result", 1, elapsed_sim_time);
   }
 
+
+
+
+  write_curvilinear_data_to_visit(
+      mesh.local_nx, mesh.local_ny, 0, unstructured_mesh.vertices_x, 
+      unstructured_mesh.vertices_y, shared_data.x);
+
+
+
+
   finalise_shared_data(&shared_data);
   finalise_mesh(&mesh);
   finalise_comms();

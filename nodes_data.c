@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <silo.h>
 #include "nodes_data.h"
 #include "nodes_interface.h"
 #include "../params.h"
@@ -158,5 +159,28 @@ void initialise_unstructured_quad_mesh_2d(
       unstructured_mesh->cell_centroids_y[cell_index] = (1.0/(6.0*A))*c_y_factor;
     }
   }
+}
+
+// Considering the writing of curvilinear data into a silo file
+void write_curvilinear_data_to_visit(
+      const int nx, const int ny, const int step, double* vertices_x, 
+      double* vertices_y, const double* data)
+{
+  char filename[MAX_STR_LEN];
+  sprintf(filename, "output%04d.silo", step);
+
+  DBfile *dbfile = DBCreate(filename, DB_CLOBBER, DB_LOCAL,
+      "simulation time step", DB_HDF5);
+
+  int dims[] = {nx+1, ny+1};
+  int ndims = 2;
+  double *coords[] = {(double*)vertices_x, (double*)vertices_y};
+  DBPutQuadmesh(dbfile, "quadmesh", NULL, coords, dims, ndims,
+      DB_DOUBLE, DB_NONCOLLINEAR, NULL);
+
+  int dims_nodal[] = {nx+1, ny+1};
+  DBPutQuadvar1(dbfile, "nodal", "quadmesh", data, dims_nodal,
+      ndims, NULL, 0, DB_DOUBLE, DB_ZONECENT, NULL);
+  DBClose(dbfile);
 }
 

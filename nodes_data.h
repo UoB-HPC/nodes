@@ -49,5 +49,10 @@ void initialise_nodes_data(
 void initialise_unstructured_quad_mesh_2d(
     UnstructuredMesh* unstructured_mesh, Mesh* mesh);
 
+// Considering the writing of curvilinear data into a silo file
+void write_curvilinear_data_to_visit(
+      const int nx, const int ny, const int step, double* vertices_x, 
+      double* vertices_y, const double* data);
+
 #endif
 
