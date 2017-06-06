@@ -139,12 +139,10 @@ void calculate_rhs(
         // Calculate the edge differentials
         const int vertex0 = edge_vertex0[(edge_index)];
         const int vertex1 = edge_vertex1[(edge_index)];
-        const double edge_dx = (vertices_x[vertex1]-vertices_x[vertex0]);
-        const double edge_dy = (vertices_y[vertex1]-vertices_y[vertex0]);
 
         // Calculate the area vector
-        const double A_x = edge_dy;
-        const double A_y = -edge_dx;
+        const double A_x = (vertices_y[vertex1]-vertices_y[vertex0]);
+        const double A_y = -(vertices_x[vertex1]-vertices_x[vertex0]);
 
         // Calculate the coefficients of transformed shape
         const double density1 = rho[(neighbour_index)];
@@ -192,7 +190,7 @@ double initialise_cg(
       const double density = rho[(cell_index)];
       const double V = volume[(cell_index)];
 
-      double cell_coeff = 0.0;
+      double neighbour_coeff_total = 0.0;
       double neighbour_contribution = 0.0;
 
       for(int ee = 0; ee < NEDGES; ++ee) {
@@ -215,30 +213,30 @@ double initialise_cg(
         // Calculate the edge differentials
         const int vertex0 = edge_vertex0[(edge_index)];
         const int vertex1 = edge_vertex1[(edge_index)];
-        const double edge_dx = (vertices_x[vertex1]-vertices_x[vertex0]);
-        const double edge_dy = (vertices_y[vertex1]-vertices_y[vertex0]);
 
         // Calculate the distance between the centroids
         const double centroid_distance = sqrt(es_x*es_x+es_y*es_y);
 
         // Calculate the area vector
-        const double A_x = edge_dy;
-        const double A_y = -edge_dx;
+        const double A_x = (vertices_y[vertex1]-vertices_y[vertex0]);
+        const double A_y = -(vertices_x[vertex1]-vertices_x[vertex0]);
 
         // Calculate the diffusion coefficient
         const double density1 = rho[(neighbour_index)];
         const double edge_density = (2.0*density*density1)/(density+density1);
         const double diffusion_coeff = conductivity/(edge_density*heat_capacity);
 
-        const double local_coeff = 
+        printf("%.12e %.12e\n", A_x, es_x);
+
+        const double neighbour_coeff = 
           (diffusion_coeff*(A_x*A_x+A_y*A_y))/
           (centroid_distance*fabs(A_x*es_x+A_y*es_y));
-        neighbour_contribution += temperature[(neighbour_index)]*local_coeff;
-        cell_coeff += local_coeff;
+        neighbour_contribution += temperature[(neighbour_index)]*neighbour_coeff;
+        neighbour_coeff_total += neighbour_coeff;
       }
 
       r[(cell_index)] = b[(cell_index)] - 
-        (cell_coeff+(density*V/dt))*temperature[(cell_index)] - neighbour_contribution;
+        (neighbour_coeff_total+(density*V/dt))*temperature[(cell_index)] - neighbour_contribution;
       p[(cell_index)] = r[(cell_index)];
       initial_r2 += r[(cell_index)]*r[(cell_index)];
     }
@@ -268,7 +266,7 @@ double calculate_pAp(
       const double density = rho[(cell_index)];
       const double V = volume[(cell_index)];
 
-      double cell_coeff = 0.0;
+      double neighbour_coeff_total = 0.0;
       double neighbour_contribution = 0.0;
 
       for(int ee = 0; ee < NEDGES; ++ee) {
@@ -291,30 +289,28 @@ double calculate_pAp(
         // Calculate the edge differentials
         const int vertex0 = edge_vertex0[(edge_index)];
         const int vertex1 = edge_vertex1[(edge_index)];
-        const double edge_dx = (vertices_x[vertex1]-vertices_x[vertex0]);
-        const double edge_dy = (vertices_y[vertex1]-vertices_y[vertex0]);
 
         // Calculate the distance between the centroids
         const double centroid_distance = sqrt(es_x*es_x+es_y*es_y);
 
         // Calculate the area vector
-        const double A_x = edge_dy;
-        const double A_y = -edge_dx;
+        const double A_x = (vertices_y[vertex1]-vertices_y[vertex0]);
+        const double A_y = -(vertices_x[vertex1]-vertices_x[vertex0]);
 
         // Calculate the diffusion coefficient
         const double density1 = rho[(neighbour_index)];
         const double edge_density = (2.0*density*density1)/(density+density1);
         const double diffusion_coeff = conductivity/(edge_density*heat_capacity);
 
-        const double local_coeff = 
+        const double neighbour_coeff = 
           (diffusion_coeff*(A_x*A_x+A_y*A_y))/
           (centroid_distance*fabs(A_x*es_x+A_y*es_y));
-        neighbour_contribution += p[(neighbour_index)]*local_coeff;
-        cell_coeff += local_coeff;
+        neighbour_contribution += p[(neighbour_index)]*neighbour_coeff;
+        neighbour_coeff_total += neighbour_coeff;
       }
 
       Ap[(cell_index)] = 
-        (cell_coeff+(density*V/dt))*p[(cell_index)]-neighbour_contribution;
+        (neighbour_coeff_total+(density*V/dt))*p[(cell_index)]-neighbour_contribution;
       pAp += p[(cell_index)]*Ap[(cell_index)];
     }
   }
