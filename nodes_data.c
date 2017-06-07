@@ -289,9 +289,9 @@ void initialise_curvilinear_quad_mesh_2d(
 
       // NOTE: This calculation of the volume is actually general to all
       // simple polygons...
-      unstructured_mesh->volume[(ii)*nx+(jj)] = A;
-      unstructured_mesh->cell_centroids_x[cell_index] = (1.0/(6.0*A))*c_x_factor;
-      unstructured_mesh->cell_centroids_y[cell_index] = (1.0/(6.0*A))*c_y_factor;
+      unstructured_mesh->volume[(cell_index)] = A;
+      unstructured_mesh->cell_centroids_x[(cell_index)] = (1.0/(6.0*A))*c_x_factor;
+      unstructured_mesh->cell_centroids_y[(cell_index)] = (1.0/(6.0*A))*c_y_factor;
     }
   }
 }
