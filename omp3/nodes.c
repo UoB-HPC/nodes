@@ -135,12 +135,12 @@ void calculate_rhs(
         const int vertex1 = edge_vertex1[(edge_index)];
 
         // Calculate the area vector, even though vertices aren't ordered well
-        const double face_midx = 0.5*(vertices_x[vertex1]+vertices_x[vertex0]);
-        const double face_midy = 0.5*(vertices_y[vertex1]+vertices_y[vertex0]);
-        const double xsign = (face_midx-cell_centroid_x < 0.0) ? -1.0 : 1.0;
-        const double ysign = (face_midy-cell_centroid_y < 0.0) ? -1.0 : 1.0;
-        const double A_x = xsign*fabs(vertices_y[vertex1]-vertices_y[vertex0]);
-        const double A_y = ysign*fabs(vertices_x[vertex1]-vertices_x[vertex0]);
+        double A_x = (vertices_y[vertex1]-vertices_y[vertex0]);
+        double A_y = -(vertices_x[vertex1]-vertices_x[vertex0]);
+        if((A_x*es_x+A_y*es_y) < 0.0) {
+          A_x = -A_x;
+          A_y = -A_y;
+        }
 
         // Calculate the gradient matrix
         const double phi0 = temperature[(cell_index)];
@@ -169,11 +169,10 @@ void calculate_rhs(
 
       // TODO: SHOULD THERE BE A COEFFICIENT FOR TAU?
       const double tau = temp_grad_cell_x*coeff[0]+temp_grad_cell_y*coeff[1];
-      b[(cell_index)] = temperature[(cell_index)] + (dt*tau)/(density*V);
+      b[(cell_index)] = temperature[(cell_index)] + (dt/(density*V))*tau;
     }
   }
 }
-
 
 // Initialises the CG solver
 double initialise_cg(
@@ -193,6 +192,7 @@ double initialise_cg(
   double initial_r2 = 0.0;
 #pragma omp parallel for reduction(+:initial_r2)
   for(int ii = PAD; ii < ny-PAD; ++ii) {
+#pragma omp simd
     for(int jj = PAD; jj < nx-PAD; ++jj) {
       const int cell_index = (ii)*nx+(jj);
 
@@ -225,12 +225,12 @@ double initialise_cg(
         const int vertex1 = edge_vertex1[(edge_index)];
 
         // Calculate the area vector, even though vertices aren't ordered well
-        const double face_midx = 0.5*(vertices_x[vertex1]+vertices_x[vertex0]);
-        const double face_midy = 0.5*(vertices_y[vertex1]+vertices_y[vertex0]);
-        const double xsign = (face_midx-cell_centroid_x < 0.0) ? -1.0 : 1.0;
-        const double ysign = (face_midy-cell_centroid_y < 0.0) ? -1.0 : 1.0;
-        const double A_x = xsign*fabs(vertices_y[vertex1]-vertices_y[vertex0]);
-        const double A_y = ysign*fabs(vertices_x[vertex1]-vertices_x[vertex0]);
+        double A_x = (vertices_y[vertex1]-vertices_y[vertex0]);
+        double A_y = -(vertices_x[vertex1]-vertices_x[vertex0]);
+        if((A_x*es_x+A_y*es_y) < 0.0) {
+          A_x = -A_x;
+          A_y = -A_y;
+        }
 
         // Calculate the diffusion coefficient
         const double edge_density = 
@@ -301,12 +301,12 @@ double calculate_pAp(
         const int vertex1 = edge_vertex1[(edge_index)];
 
         // Calculate the area vector, even though vertices aren't ordered well
-        const double face_midx = 0.5*(vertices_x[vertex1]+vertices_x[vertex0]);
-        const double face_midy = 0.5*(vertices_y[vertex1]+vertices_y[vertex0]);
-        const double xsign = (face_midx-cell_centroid_x < 0.0) ? -1.0 : 1.0;
-        const double ysign = (face_midy-cell_centroid_y < 0.0) ? -1.0 : 1.0;
-        const double A_x = xsign*fabs(vertices_y[vertex1]-vertices_y[vertex0]);
-        const double A_y = ysign*fabs(vertices_x[vertex1]-vertices_x[vertex0]);
+        double A_x = (vertices_y[vertex1]-vertices_y[vertex0]);
+        double A_y = -(vertices_x[vertex1]-vertices_x[vertex0]);
+        if((A_x*es_x+A_y*es_y) < 0.0) {
+          A_x = -A_x;
+          A_y = -A_y;
+        }
 
         // Calculate the diffusion coefficient
         const double edge_density = 
