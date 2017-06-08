@@ -167,8 +167,9 @@ void calculate_rhs(
       const double temp_grad_cell_y = 
         MTM_det*(MT_del_phi[1]*MTM[0]-MT_del_phi[0]*MTM[1]);
 
+      // TODO: SHOULD THERE BE A COEFFICIENT FOR TAU?
       const double tau = temp_grad_cell_x*coeff[0]+temp_grad_cell_y*coeff[1];
-      b[(cell_index)] = temperature[(cell_index)] + 0.0;//tau;
+      b[(cell_index)] = temperature[(cell_index)] + (dt*tau)/(density*V);
     }
   }
 }
@@ -212,7 +213,7 @@ double initialise_cg(
           edges_cells[edge_index*NCELLS_PER_EDGE+1] :
           edges_cells[edge_index*NCELLS_PER_EDGE];
 
-        // Calculate the vector pointing between the cell centroids
+        // Calculate the unit vector pointing between the cell centroids
         double es_x = (cell_centroids_x[(neighbour_index)]-cell_centroid_x);
         double es_y = (cell_centroids_y[(neighbour_index)]-cell_centroid_y);
         const double centroid_distance = sqrt(es_x*es_x+es_y*es_y);
@@ -288,7 +289,7 @@ double calculate_pAp(
           edges_cells[edge_index*NCELLS_PER_EDGE+1] :
           edges_cells[edge_index*NCELLS_PER_EDGE];
 
-        // Calculate the vector pointing between the cell centroids
+        // Calculate the unit vector pointing between the cell centroids
         double es_x = (cell_centroids_x[(neighbour_index)]-cell_centroid_x);
         double es_y = (cell_centroids_y[(neighbour_index)]-cell_centroid_y);
         const double centroid_distance = sqrt(es_x*es_x+es_y*es_y);

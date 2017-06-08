@@ -196,8 +196,10 @@ void initialise_curvilinear_quad_mesh_2d(
       const double cell_width = (width/(double)global_nx);
       const double cell_height = (height/(double)global_ny);
       const int index = (ii)*(nx+1)+(jj);
-      unstructured_mesh->vertices_x[index] = (double)((jj)-PAD)*cell_width+(cell_width*(yskip&xskip ? 0.8 : 1.2));
-      unstructured_mesh->vertices_y[index] = (double)((ii)-PAD)*cell_height+(cell_height*(yskip&xskip ? 0.8 : 1.2));
+      unstructured_mesh->vertices_x[index] =
+        (double)((jj)-PAD)*cell_width+(cell_width*(yskip&xskip ? 0.8 : 1.2));
+      unstructured_mesh->vertices_y[index] =
+        (double)((ii)-PAD)*cell_height+(cell_height*(yskip&xskip ? 0.8 : 1.2));
     }
   }
 
