@@ -9,7 +9,7 @@ OPTIONS		  			 = -DENABLE_PROFILING
 
 # Compiler-specific flags
 CFLAGS_INTEL			 = -qopenmp -no-prec-div -std=gnu99 -DINTEL \
-										 -Wall -qopt-report=5 #-xhost
+										 -Wall -qopt-report=5 -I/Applications/VisIt.app//Contents/Resources/2.10.2/darwin-x86_64/include/silo/include/ #-xhost
 CFLAGS_INTEL_KNL	 = -O3 -qopenmp -no-prec-div -std=gnu99 -DINTEL \
 										 -xMIC-AVX512 -Wall -qopt-report=5
 CFLAGS_GCC				 = -std=gnu99 -fopenmp -march=native -Wall #-std=gnu99
@@ -57,7 +57,7 @@ endif
 # Default compiler
 ARCH_LINKER    		= $(ARCH_COMPILER_CC)
 ARCH_FLAGS     		= $(CFLAGS_$(COMPILER))
-ARCH_LDFLAGS   		= $(ARCH_FLAGS) -lm
+ARCH_LDFLAGS   		= $(ARCH_FLAGS) -lm -L/Applications/VisIt.app//Contents/Resources/2.10.2/darwin-x86_64/lib -lsiloh5
 ARCH_BUILD_DIR 		= ../obj/nodes/
 ARCH_DIR       		= ..
 
