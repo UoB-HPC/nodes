@@ -4,10 +4,10 @@
 #include <math.h>
 #include <assert.h>
 #include "nodes.h"
-#include "../nodes_data.h"
-#include "../nodes_interface.h"
-#include "../../profiler.h"
-#include "../../comms.h"
+#include "../../nodes_data.h"
+#include "../../nodes_interface.h"
+#include "../../../profiler.h"
+#include "../../../comms.h"
 
 // Solve the unstructured diffusion problem
 void solve_unstructured_diffusion_2d(

@@ -1,5 +1,6 @@
 # User defined parameters
 KERNELS 	  			 = omp3
+SUBPROJECT				 = curvilinear
 COMPILER    			 = INTEL
 MPI								 = no
 DECOMP						 = TILES
@@ -67,7 +68,7 @@ endif
 
 # Get specialised kernels
 SRC  			 = $(wildcard *.c)
-SRC  			+= $(wildcard $(KERNELS)/*.c)
+SRC  			+= $(wildcard $(KERNELS)/$(SUBPROJECT)/*.c)
 SRC  			+= $(wildcard $(ARCH_DIR)/$(KERNELS)/*.c)
 SRC 			+= $(subst main.c,, $(wildcard $(ARCH_DIR)/*.c))
 SRC_CLEAN  = $(subst $(ARCH_DIR)/,,$(SRC))
@@ -85,7 +86,7 @@ $(ARCH_BUILD_DIR)/%.o: $(ARCH_DIR)/%.c Makefile
 
 make_build_dir:
 	@mkdir -p $(ARCH_BUILD_DIR)/
-	@mkdir -p $(ARCH_BUILD_DIR)/$(KERNELS)
+	@mkdir -p $(ARCH_BUILD_DIR)/$(KERNELS)/$(SUBPROJECT)
 
 clean:
 	rm -rf $(ARCH_BUILD_DIR)/* nodes.$(KERNELS) *.vtk *.bov *.dat \
