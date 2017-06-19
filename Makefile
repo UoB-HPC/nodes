@@ -1,6 +1,6 @@
 # User defined parameters
 KERNELS 	  			 = omp3
-SUBPROJECT				 = curvilinear
+SUBPROJECT				 = cg
 COMPILER    			 = INTEL
 MPI								 = no
 DECOMP						 = TILES

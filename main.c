@@ -21,12 +21,13 @@ int main(int argc, char** argv)
   const char* nodes_params = argv[1];
   mesh.global_nx = get_int_parameter("nx", nodes_params);
   mesh.global_ny = get_int_parameter("ny", nodes_params);
-  mesh.local_nx = mesh.global_nx + 2*PAD;
-  mesh.local_ny = mesh.global_ny + 2*PAD;
+  mesh.local_nx = mesh.global_nx + 2*mesh.pad;
+  mesh.local_ny = mesh.global_ny + 2*mesh.pad;
   mesh.width = get_double_parameter("width", ARCH_ROOT_PARAMS);
   mesh.height = get_double_parameter("height", ARCH_ROOT_PARAMS);
   mesh.sim_end = get_double_parameter("sim_end", ARCH_ROOT_PARAMS);
   mesh.dt = get_double_parameter("max_dt", ARCH_ROOT_PARAMS);
+  mesh.pad = 1;
   mesh.rank = MASTER;
   mesh.nranks = 1;
   mesh.niters = get_int_parameter("iterations", nodes_params);
@@ -47,8 +48,8 @@ int main(int argc, char** argv)
 
   SharedData shared_data = {0};
   initialise_shared_data_2d(
-      mesh.global_nx, mesh.global_ny, mesh.local_nx, mesh.local_ny, mesh.x_off, 
-      mesh.y_off, mesh.width, mesh.height, nodes_params, mesh.edgex, 
+      mesh.global_nx, mesh.global_ny, mesh.local_nx, mesh.local_ny, mesh.pad, 
+      mesh.x_off, mesh.y_off, mesh.width, mesh.height, nodes_params, mesh.edgex, 
       mesh.edgey, &shared_data);
 
   handle_boundary_2d(
@@ -60,8 +61,8 @@ int main(int argc, char** argv)
 
   if(visit_dump) {
     write_all_ranks_to_visit(
-        mesh.global_nx+2*PAD, mesh.global_ny+2*PAD, mesh.local_nx, mesh.local_ny, 
-        mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, mesh.neighbours, 
+        mesh.global_nx+2*mesh.pad, mesh.global_ny+2*mesh.pad, mesh.local_nx, mesh.local_ny, 
+        mesh.pad, mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, mesh.neighbours, 
         shared_data.x, "final_result", 0, 0.0);
   }
 
@@ -79,7 +80,7 @@ int main(int argc, char** argv)
     int end_niters = 0;
     double end_error = 0.0;
     solve_unstructured_diffusion_2d(
-        mesh.local_nx, mesh.local_ny, &mesh, &unstructured_mesh, max_inners, mesh.dt, 
+        mesh.local_nx, mesh.local_ny, mesh.pad, &mesh, &unstructured_mesh, max_inners, mesh.dt, 
         nodes_data.heat_capacity, nodes_data.conductivity, shared_data.x, 
         nodes_data.b, shared_data.r, shared_data.p, shared_data.rho, shared_data.Ap, 
         &end_niters, &end_error, shared_data.reduce_array0);
@@ -108,8 +109,8 @@ int main(int argc, char** argv)
 
   if(visit_dump) {
     write_all_ranks_to_visit(
-        mesh.global_nx+2*PAD, mesh.global_ny+2*PAD, mesh.local_nx, mesh.local_ny, 
-        mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, mesh.neighbours, 
+        mesh.global_nx+2*mesh.pad, mesh.global_ny+2*mesh.pad, mesh.local_nx, mesh.local_ny, 
+        mesh.pad, mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, mesh.neighbours, 
         shared_data.x, "final_result", 1, elapsed_sim_time);
   }
 

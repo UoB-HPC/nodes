@@ -36,6 +36,7 @@ void initialise_rectilinear_quad_mesh_2d(
   // Just setting all cells to have same number of edges
   const int nx = mesh->local_nx;
   const int ny = mesh->local_nx;
+  const int pad = mesh->pad;
   const int global_nx = mesh->global_nx;
   const int global_ny = mesh->global_nx;
   const double width = mesh->width;
@@ -59,8 +60,8 @@ void initialise_rectilinear_quad_mesh_2d(
   for(int ii = 0; ii < (ny+1); ++ii) {
     for(int jj = 0; jj < (nx+1); ++jj) {
       const int index = (ii)*(nx+1)+(jj);
-      unstructured_mesh->vertices_x[index] = (double)((jj)-PAD)*(width/(double)global_nx);
-      unstructured_mesh->vertices_y[index] = (double)((ii)-PAD)*(height/(double)global_ny);
+      unstructured_mesh->vertices_x[index] = (double)((jj)-pad)*(width/(double)global_nx);
+      unstructured_mesh->vertices_y[index] = (double)((ii)-pad)*(height/(double)global_ny);
     }
   }
 
@@ -169,6 +170,7 @@ void initialise_curvilinear_quad_mesh_2d(
   // Just setting all cells to have same number of edges
   const int nx = mesh->local_nx;
   const int ny = mesh->local_nx;
+  const int pad = mesh->pad;
   const int global_nx = mesh->global_nx;
   const int global_ny = mesh->global_nx;
   const double width = mesh->width;
@@ -197,9 +199,9 @@ void initialise_curvilinear_quad_mesh_2d(
       const double cell_height = (height/(double)global_ny);
       const int index = (ii)*(nx+1)+(jj);
       unstructured_mesh->vertices_x[index] =
-        (double)((jj)-PAD)*cell_width+(cell_width*(yskip&xskip ? 0.8 : 1.2));
+        (double)((jj)-pad)*cell_width+(cell_width*(yskip&xskip ? 0.8 : 1.2));
       unstructured_mesh->vertices_y[index] =
-        (double)((ii)-PAD)*cell_height+(cell_height*(yskip&xskip ? 0.8 : 1.2));
+        (double)((ii)-pad)*cell_height+(cell_height*(yskip&xskip ? 0.8 : 1.2));
     }
   }
 

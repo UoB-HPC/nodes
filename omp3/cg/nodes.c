@@ -11,14 +11,14 @@
 
 // Solve the unstructured diffusion problem
 void solve_unstructured_diffusion_2d(
-    const int nx, const int ny, Mesh* mesh, UnstructuredMesh* unstructured_mesh, 
+    const int nx, const int ny, const int pad, Mesh* mesh, UnstructuredMesh* unstructured_mesh, 
     const int max_inners, const double dt, const double heat_capacity, 
     const double conductivity, double* temperature, double* b, double* r, double* p, 
     double* rho, double* Ap, int* end_niters, double* end_error, double* reduce_array)
 {
   // Store initial residual
   calculate_rhs( 
-      nx, ny, heat_capacity, conductivity, dt, 
+      nx, ny, pad, heat_capacity, conductivity, dt, 
       unstructured_mesh->volume, rho, temperature, b, 
       unstructured_mesh->edge_vertex0, unstructured_mesh->edge_vertex1, 
       unstructured_mesh->cell_centroids_x, unstructured_mesh->cell_centroids_y, 
@@ -26,7 +26,7 @@ void solve_unstructured_diffusion_2d(
       unstructured_mesh->cells_edges, unstructured_mesh->edges_cells);
 
   double local_old_r2 = initialise_cg(
-      nx, ny, dt, conductivity, heat_capacity, 
+      nx, ny, pad, dt, conductivity, heat_capacity, 
       p, r, temperature, unstructured_mesh->volume, b, 
       rho, unstructured_mesh->cells_edges, unstructured_mesh->edge_vertex0, 
       unstructured_mesh->edge_vertex1, unstructured_mesh->vertices_x, 
@@ -43,7 +43,7 @@ void solve_unstructured_diffusion_2d(
   for(ii = 0; ii < max_inners; ++ii) {
 
     const double local_pAp = calculate_pAp(
-        nx, ny, p, Ap, dt, conductivity, heat_capacity, temperature, 
+        nx, ny, pad, p, Ap, dt, conductivity, heat_capacity, temperature, 
         unstructured_mesh->volume, rho, unstructured_mesh->cells_edges, 
         unstructured_mesh->edge_vertex0, unstructured_mesh->edge_vertex1, 
         unstructured_mesh->vertices_x, unstructured_mesh->vertices_y, 
@@ -53,7 +53,7 @@ void solve_unstructured_diffusion_2d(
     const double global_pAp = reduce_all_sum(local_pAp);
     const double alpha = global_old_r2/global_pAp;
 
-    const double local_new_r2 = calculate_new_r2(nx, ny, alpha, temperature, p, r, Ap);
+    const double local_new_r2 = calculate_new_r2(nx, ny, pad, alpha, temperature, p, r, Ap);
     const double global_new_r2 = reduce_all_sum(local_new_r2);
     const double beta = global_new_r2/global_old_r2;
     handle_boundary_2d(nx, ny, mesh, temperature, NO_INVERT, PACK);
@@ -64,7 +64,7 @@ void solve_unstructured_diffusion_2d(
       break;
     }
 
-    update_conjugate(nx, ny, beta, r, p);
+    update_conjugate(nx, ny, pad, beta, r, p);
     handle_boundary_2d(nx, ny, mesh, p, NO_INVERT, PACK);
 
     // Store the old squared residual
@@ -77,10 +77,11 @@ void solve_unstructured_diffusion_2d(
 
 // Calculate the RHS including the unstructured correction term
 void calculate_rhs(
-    const int nx, const int ny, const double heat_capacity, const double conductivity, 
-    const double dt, const double* volume, const double* rho, const double* temperature, 
-    double* b, const int* edge_vertex0, const int* edge_vertex1, 
-    const double* cell_centroids_x, const double* cell_centroids_y, const double* vertices_x, 
+    const int nx, const int ny, const int pad, const double heat_capacity, 
+    const double conductivity, const double dt, const double* volume, 
+    const double* rho, const double* temperature, double* b, const int* edge_vertex0, 
+    const int* edge_vertex1, const double* cell_centroids_x, 
+    const double* cell_centroids_y, const double* vertices_x, 
     const double* vertices_y, const int* cells_edges, const int* edges_cells)
 {
   /*
@@ -89,9 +90,9 @@ void calculate_rhs(
 
   // Find the RHS that includes the unstructured mesh correction
 #pragma omp parallel for
-  for(int ii = PAD; ii < ny-PAD; ++ii) {
+  for(int ii = pad; ii < ny-pad; ++ii) {
 #pragma omp simd
-    for(int jj = PAD; jj < nx-PAD; ++jj) {
+    for(int jj = pad; jj < nx-pad; ++jj) {
 
       // Fetch the cell centered values
       const int cell_index = (ii)*nx+(jj);
@@ -176,7 +177,7 @@ void calculate_rhs(
 
 // Initialises the CG solver
 double initialise_cg(
-    const int nx, const int ny, const double dt, const double conductivity,
+    const int nx, const int ny, const int pad, const double dt, const double conductivity,
     const double heat_capacity, double* p, double* r, const double* temperature, 
     const double* volume, const double* b, const double* rho, const int* cells_edges, 
     const int* edge_vertex0, const int* edge_vertex1, const double* vertices_x, 
@@ -191,9 +192,9 @@ double initialise_cg(
 
   double initial_r2 = 0.0;
 #pragma omp parallel for reduction(+:initial_r2)
-  for(int ii = PAD; ii < ny-PAD; ++ii) {
+  for(int ii = pad; ii < ny-pad; ++ii) {
 #pragma omp simd
-    for(int jj = PAD; jj < nx-PAD; ++jj) {
+    for(int jj = pad; jj < nx-pad; ++jj) {
       const int cell_index = (ii)*nx+(jj);
 
       const double density = rho[(cell_index)];
@@ -255,8 +256,8 @@ double initialise_cg(
 
 // Calculates a value for alpha
 double calculate_pAp(
-    const int nx, const int ny, double* p, double* Ap, const double dt, 
-    const double conductivity, const double heat_capacity, 
+    const int nx, const int ny, const int pad, double* p, double* Ap, 
+    const double dt, const double conductivity, const double heat_capacity, 
     const double* temperature, const double* volume, const double* rho, 
     const int* cells_edges, const int* edge_vertex0, const int* edge_vertex1, 
     const double* vertices_x, const double* vertices_y,
@@ -267,9 +268,9 @@ double calculate_pAp(
 
   double pAp = 0.0;
 #pragma omp parallel for reduction(+:pAp)
-  for(int ii = PAD; ii < ny-PAD; ++ii) {
+  for(int ii = pad; ii < ny-pad; ++ii) {
 #pragma omp simd
-    for(int jj = PAD; jj < nx-PAD; ++jj) {
+    for(int jj = pad; jj < nx-pad; ++jj) {
       const int cell_index = (ii)*nx+(jj);
 
       const double density = rho[(cell_index)];
@@ -330,14 +331,15 @@ double calculate_pAp(
 
 // Updates the current guess using the calculated alpha
 double calculate_new_r2(
-    int nx, int ny, double alpha, double* temperature, double* p, double* r, double* Ap)
+    const int nx, const int ny, const int pad, double alpha, double* temperature, 
+    double* p, double* r, double* Ap)
 {
   START_PROFILING(&compute_profile);
 
   double new_r2 = 0.0;
 
-  for(int ii = PAD; ii < ny-PAD; ++ii) {
-    for(int jj = PAD; jj < nx-PAD; ++jj) {
+  for(int ii = pad; ii < ny-pad; ++ii) {
+    for(int jj = pad; jj < nx-pad; ++jj) {
       temperature[(ii)*nx+(jj)] += alpha*p[(ii)*nx+(jj)];
       r[(ii)*nx+(jj)] -= alpha*Ap[(ii)*nx+(jj)];
       new_r2 += r[(ii)*nx+(jj)]*r[(ii)*nx+(jj)];
@@ -350,26 +352,15 @@ double calculate_new_r2(
 
 // Updates the conjugate from the calculated beta and residual
 void update_conjugate(
-    const int nx, const int ny, const double beta, const double* r, double* p)
+    const int nx, const int ny, const int pad, const double beta, 
+    const double* r, double* p)
 {
   START_PROFILING(&compute_profile);
-  for(int ii = PAD; ii < ny-PAD; ++ii) {
-    for(int jj = PAD; jj < nx-PAD; ++jj) {
+  for(int ii = pad; ii < ny-pad; ++ii) {
+    for(int jj = pad; jj < nx-pad; ++jj) {
       p[(ii)*nx+(jj)] = r[(ii)*nx+(jj)] + beta*p[(ii)*nx+(jj)];
     }
   }
   STOP_PROFILING(&compute_profile, "update conjugate");
-}
-
-// Prints the vector to std out
-void print_vec(
-    const int nx, const int ny, double* a)
-{
-  for(int ii = 0; ii < ny; ++ii) {
-    for(int jj = 0; jj < nx; ++jj) {
-      printf("%.3e ", a[ii*nx+jj]);
-    }
-    printf("\n");
-  }
 }
 
