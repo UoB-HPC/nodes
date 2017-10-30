@@ -39,18 +39,18 @@ typedef struct {
 
   int nedges;
 
-} UnstructuredMesh;
+} NodesMesh;
 
 // Initialises the data specific to the nodes application
 void initialise_nodes_data(const int nx, const int ny, NodesData* nodes_data,
                            const char* nodes_params);
 
 // Build a 2d rectilinear mesh of quads
-void initialise_rectilinear_quad_mesh_2d(UnstructuredMesh* unstructured_mesh,
+void initialise_rectilinear_quad_mesh_2d(NodesMesh* unstructured_mesh,
                                          Mesh* mesh);
 
 // Build a 2d curvilinear mesh of quads
-void initialise_curvilinear_quad_mesh_2d(UnstructuredMesh* unstructured_mesh,
+void initialise_curvilinear_quad_mesh_2d(NodesMesh* unstructured_mesh,
                                          Mesh* mesh);
 
 // Considering the writing of curvilinear data into a silo file

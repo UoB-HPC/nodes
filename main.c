@@ -38,7 +38,7 @@ int main(int argc, char** argv) {
   initialise_comms(&mesh);
   initialise_mesh_2d(&mesh);
 
-  UnstructuredMesh unstructured_mesh;
+  NodesMesh unstructured_mesh;
   initialise_curvilinear_quad_mesh_2d(&unstructured_mesh, &mesh);
 
   NodesData nodes_data = {0};

@@ -12,26 +12,27 @@
 // Solve the unstructured diffusion problem
 void solve_unstructured_diffusion_2d(
     const int nx, const int ny, const int pad, Mesh* mesh,
-    UnstructuredMesh* unstructured_mesh, const int max_inners, const double dt,
+    NodesMesh* nmesh, const int max_inners, const double dt,
     const double heat_capacity, const double conductivity, double* temperature,
     double* b, double* r, double* p, double* rho, double* Ap, int* end_niters,
     double* end_error, double* reduce_array) {
+
   // Store initial residual
   calculate_rhs(
-      nx, ny, pad, heat_capacity, conductivity, dt, unstructured_mesh->volume,
-      rho, temperature, b, unstructured_mesh->edge_vertex0,
-      unstructured_mesh->edge_vertex1, unstructured_mesh->cell_centroids_x,
-      unstructured_mesh->cell_centroids_y, unstructured_mesh->vertices_x,
-      unstructured_mesh->vertices_y, unstructured_mesh->cells_edges,
-      unstructured_mesh->edges_cells);
+      nx, ny, pad, heat_capacity, conductivity, dt, nmesh->volume,
+      rho, temperature, b, nmesh->edge_vertex0,
+      nmesh->edge_vertex1, nmesh->cell_centroids_x,
+      nmesh->cell_centroids_y, nmesh->vertices_x,
+      nmesh->vertices_y, nmesh->cells_edges,
+      nmesh->edges_cells);
 
   double local_old_r2 = initialise_cg(
       nx, ny, pad, dt, conductivity, heat_capacity, p, r, temperature,
-      unstructured_mesh->volume, b, rho, unstructured_mesh->cells_edges,
-      unstructured_mesh->edge_vertex0, unstructured_mesh->edge_vertex1,
-      unstructured_mesh->vertices_x, unstructured_mesh->vertices_y,
-      unstructured_mesh->cell_centroids_x, unstructured_mesh->cell_centroids_y,
-      unstructured_mesh->edges_cells);
+      nmesh->volume, b, rho, nmesh->cells_edges,
+      nmesh->edge_vertex0, nmesh->edge_vertex1,
+      nmesh->vertices_x, nmesh->vertices_y,
+      nmesh->cell_centroids_x, nmesh->cell_centroids_y,
+      nmesh->edges_cells);
 
   double global_old_r2 = reduce_all_sum(local_old_r2);
 
@@ -44,11 +45,11 @@ void solve_unstructured_diffusion_2d(
 
     const double local_pAp = calculate_pAp(
         nx, ny, pad, p, Ap, dt, conductivity, heat_capacity, temperature,
-        unstructured_mesh->volume, rho, unstructured_mesh->cells_edges,
-        unstructured_mesh->edge_vertex0, unstructured_mesh->edge_vertex1,
-        unstructured_mesh->vertices_x, unstructured_mesh->vertices_y,
-        unstructured_mesh->cell_centroids_x,
-        unstructured_mesh->cell_centroids_y, unstructured_mesh->edges_cells);
+        nmesh->volume, rho, nmesh->cells_edges,
+        nmesh->edge_vertex0, nmesh->edge_vertex1,
+        nmesh->vertices_x, nmesh->vertices_y,
+        nmesh->cell_centroids_x,
+        nmesh->cell_centroids_y, nmesh->edges_cells);
 
     const double global_pAp = reduce_all_sum(local_pAp);
     const double alpha = global_old_r2 / global_pAp;

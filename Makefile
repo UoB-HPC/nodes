@@ -3,6 +3,7 @@ KERNELS 	  			 = omp3
 SUBPROJECT				 = cg
 COMPILER    			 = INTEL
 MPI								 = no
+SILO 							 = no
 DECOMP						 = TILES
 ARCH_COMPILER_CC   = mpicc
 ARCH_COMPILER_CPP  = mpic++
@@ -10,7 +11,7 @@ OPTIONS		  			 = -DENABLE_PROFILING
 
 # Compiler-specific flags
 CFLAGS_INTEL			 = -qopenmp -no-prec-div -std=gnu99 -DINTEL \
-										 -Wall -qopt-report=5 -I/Applications/VisIt.app//Contents/Resources/2.10.2/darwin-x86_64/include/silo/include/ #-xhost
+										 -Wall -qopt-report=5 #-xhost
 CFLAGS_INTEL_KNL	 = -O3 -qopenmp -no-prec-div -std=gnu99 -DINTEL \
 										 -xMIC-AVX512 -Wall -qopt-report=5
 CFLAGS_GCC				 = -std=gnu99 -fopenmp -march=native -Wall #-std=gnu99
@@ -58,9 +59,15 @@ endif
 # Default compiler
 ARCH_LINKER    		= $(ARCH_COMPILER_CC)
 ARCH_FLAGS     		= $(CFLAGS_$(COMPILER))
-ARCH_LDFLAGS   		= $(ARCH_FLAGS) -lm -L/Applications/VisIt.app//Contents/Resources/2.10.2/darwin-x86_64/lib -lsiloh5
+ARCH_LDFLAGS   		= $(ARCH_FLAGS) -lm 
 ARCH_BUILD_DIR 		= ../obj/nodes/
 ARCH_DIR       		= ..
+
+ifeq ($(SILO), YES)
+ OPTIONS += -DENABLE_SILO
+ ARCH_LDFLAGS += -L/Applications/VisIt.app//Contents/Resources/2.10.2/darwin-x86_64/lib -lsiloh5
+ ARCH_FLAGS += -I/Applications/VisIt.app//Contents/Resources/2.10.2/darwin-x86_64/include/silo/include/ 
+endif
 
 ifeq ($(KERNELS), cuda)
 include Makefile.cuda
